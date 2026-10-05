@@ -69,9 +69,10 @@ jobs:
             gh api -X PATCH "repos/$GH_REPO/releases/$id" \
               -f name="ReRAC Launcher $TAG" -F prerelease="$PRERELEASE" -F body=@notes.md > /dev/null
           else
-            gh release create "$TAG" --verify-tag --draft --prerelease="$PRERELEASE" \
-              --title "ReRAC Launcher $TAG" --notes-file notes.md
-            id=$(find_id)
+            # The id from the create call itself: the release list lags behind a release just created.
+            id=$(jq -n --rawfile body notes.md --argjson pre "$PRERELEASE" \
+              '{tag_name: env.TAG, name: ("ReRAC Launcher " + env.TAG), body: $body, draft: true, prerelease: $pre}' |
+              gh api -X POST "repos/$GH_REPO/releases" --input - --jq .id)
           fi
           if [ -z "$id" ]; then
             echo "::error::Could not find the release for $TAG."
