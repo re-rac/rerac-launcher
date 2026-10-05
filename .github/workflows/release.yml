@@ -178,6 +178,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
           BUNDLE_DIR: src-tauri/target/${{ matrix.target }}/release/bundle
           INSTALLER: ${{ matrix.installer }}
           ASSET: ${{ matrix.asset }}
@@ -190,7 +191,12 @@ jobs:
           fi
           mkdir -p stable
           cp "${files[0]}" "stable/$ASSET"
-          gh release upload "$TAG" "stable/$ASSET" --clobber
+          # By the draft's id: `gh release upload <tag>` cannot find a draft ("release not found").
+          for old in $(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets" --paginate --jq ".[] | select(.name == \"$ASSET\") | .id"); do
+            gh api -X DELETE "repos/$GH_REPO/releases/assets/$old"
+          done
+          gh api -X POST "https://uploads.github.com/repos/$GH_REPO/releases/$RELEASE_ID/assets?name=$ASSET" \
+            -H "Content-Type: application/octet-stream" --input "stable/$ASSET" --jq .browser_download_url
 
   publish:
     name: Publish release
