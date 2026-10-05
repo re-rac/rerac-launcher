@@ -113,7 +113,7 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
       />
     );
   } else if (!hasVersion) {
-    panel = <NoVersionPanel problem={snapshot?.active?.problem ?? null} onOpen={() => go("settings/versions/development")} />;
+    panel = <NoVersionPanel problem={snapshot?.active?.problem ?? null} onOpen={() => go("settings/versions/official")} />;
   } else if (installed && status?.stale) {
     panel = <StalePanel status={status} onReextract={install} />;
   } else if (installed) {
