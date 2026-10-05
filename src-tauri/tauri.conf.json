@@ -32,6 +32,9 @@
     "active": true,
     "targets": "all",
     "category": "Game",
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "copyright": "Copyright (c) 2026 ReRAC contributors",
     "license": "ISC",
     "shortDescription": "Launcher for ReRAC",
