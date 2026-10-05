@@ -1,6 +1,6 @@
 //! Official releases from the GitHub releases API.
 //!
-//! Off by default (`settings.official.enabled`): the game repository is private for now. The
+//! On by default (`settings.official.enabled`), reading the game's releases on re-rac/rerac. The
 //! owner and repo are configurable. A mod feed can reuse `fetch_releases` with another repo.
 
 use serde::{Deserialize, Serialize};

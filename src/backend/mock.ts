@@ -126,7 +126,7 @@ export function createMockBackend(): Backend {
   const settings: Settings = {
     schema: 1,
     active_version: noVersion ? null : { source: "development", id: DEV_BUILD },
-    official: { enabled: false, owner: "re-rac", repo: "rerac" },
+    official: { enabled: true, owner: "re-rac", repo: "rerac" },
     dev_versions: noVersion ? [] : [{ path: DEV_BUILD }, { path: `${HOME}/Downloads/rerac-old` }],
     ntsc_only: false,
     minimize_while_playing: false,

@@ -117,9 +117,9 @@ function Official() {
         <div className="notice plate">
           <IconInfo size={22} />
           <div>
-            <strong>Official releases will appear here once published.</strong>
+            <strong>Official releases are turned off.</strong>
             <p className="muted">
-              The ReRAC repository is private for now. Until then, use a build from the Development tab.
+              Turn them on under Release feed below, or use a build from the Development tab.
             </p>
           </div>
         </div>
@@ -208,7 +208,7 @@ function Official() {
       </div>
       <details className="card plate advanced">
         <summary>Release feed</summary>
-        <p className="muted small">GitHub repository the Official list reads from. Off until the repository is public.</p>
+        <p className="muted small">GitHub repository the Official list reads from.</p>
         <div className="form-row">
           <label>
             Owner

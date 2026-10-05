@@ -36,7 +36,7 @@ impl Default for Settings {
     }
 }
 
-/// GitHub releases feed. Off by default: the repository is private for now.
+/// GitHub releases feed (the game's releases on re-rac/rerac); on by default.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OfficialSettings {
@@ -47,7 +47,7 @@ pub struct OfficialSettings {
 
 impl Default for OfficialSettings {
     fn default() -> Self {
-        OfficialSettings { enabled: false, owner: "re-rac".into(), repo: "rerac".into() }
+        OfficialSettings { enabled: true, owner: "re-rac".into(), repo: "rerac".into() }
     }
 }
 
@@ -115,7 +115,7 @@ mod tests {
         let back = Settings::load(&file);
         assert_eq!(back, s);
         assert!(back.is_active(&r));
-        assert!(!back.official.enabled);
+        assert!(back.official.enabled);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 [package]
 name = "rerac-launcher"
-version = "0.1.0"
+version = "0.2.0"
 description = "Launcher for ReRAC: installs game data from your own disc image and starts the game"
 authors = ["ReRAC contributors"]
 license = "ISC"
