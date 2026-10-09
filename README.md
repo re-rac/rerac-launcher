@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://re-rac.github.io">Website</a> ·
+  <a href="https://discord.gg/v2Ek44kdyu">Discord</a> ·
   <a href="https://github.com/re-rac/rerac">Game</a> ·
   <a href="https://github.com/re-rac/rerac-launcher">Launcher</a>
 </p>
@@ -49,8 +50,9 @@ made for another version.
 
 ## Asking for help
 
-The launcher has no support-package export. Attach your log files to the report instead: Help → **Logs folder**, or
-Settings → Folders → **Open logs**, opens the folder. Every extraction, verification, asset export and game session
+Ask for help or report a problem on the [ReRAC Discord](https://discord.gg/v2Ek44kdyu). The launcher has no
+support-package export, so attach your log files to the report: Help → **Logs folder**, or Settings → Folders →
+**Open logs**, opens the folder. Every extraction, verification, asset export and game session
 writes its own file there (`extract-rac1-<time>.log`, `verify-rac1-<time>.log`, `export-rac1-<time>.log`,
 `rac1-<time>.log`). The launcher itself writes only `launcher.log`, for one-off notes such as copying the data
 folder from before the rename to ReRAC (the old `randcrw` folder is copied once to `rerac` and left as it was).
