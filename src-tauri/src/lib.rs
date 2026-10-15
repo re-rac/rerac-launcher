@@ -42,6 +42,7 @@ pub fn run() {
             commands::launch_game,
             commands::open_log,
             commands::set_minimize_while_playing,
+            commands::set_graphics_backend,
             commands::open_folder,
             commands::open_url,
             commands::pick_folder,

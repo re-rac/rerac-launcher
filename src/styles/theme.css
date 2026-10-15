@@ -332,6 +332,26 @@ button {
   outline: 2px solid var(--bolt);
   outline-offset: 2px;
 }
+/* One-of-several choice: the same well and green as the switch, round, with a centre dot. */
+.toggle-ui.is-radio {
+  width: 22px;
+  border-radius: 50%;
+}
+.toggle-ui.is-radio::after {
+  top: 4px;
+  left: 4px;
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 0.15s var(--ease),
+    transform 0.2s var(--ease);
+}
+.toggle input:checked + .toggle-ui.is-radio::after {
+  opacity: 1;
+  transform: none;
+}
 
 input[type="text"],
 input:not([type]) {

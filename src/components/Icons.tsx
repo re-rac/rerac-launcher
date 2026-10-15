@@ -85,6 +85,13 @@ export const IconDots = (p: P) => (
   </Svg>
 );
 
+export const IconChip = (p: P) => (
+  <Svg {...p}>
+    <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    <path d="M9.5 9.5h5v5h-5zM9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3" />
+  </Svg>
+);
+
 export const IconDownload = (p: P) => (
   <Svg {...p}>
     <path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" />

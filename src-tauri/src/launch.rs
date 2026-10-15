@@ -1,5 +1,6 @@
 //! Starts the game: `<runtime> --data-dir <game_data_dir>` with `RC_DATA_DIR` set too
-//! (contract §Runtime). stdout and stderr go to `logs/<game>-<unix time>.log`.
+//! (contract §Runtime), plus `WGPU_BACKEND` when the game's graphics backend is not automatic.
+//! stdout and stderr go to `logs/<game>-<unix time>.log`.
 //!
 //! [`plan`] decides what to start from the active version and the installed data (and refuses
 //! stale data before the runtime would exit 4); [`GameProcess`] runs it and reports the exit.
@@ -7,7 +8,7 @@
 use crate::contract::DATA_DIR_ENV;
 use crate::extractor;
 use crate::paths::Layout;
-use crate::settings::Settings;
+use crate::settings::{GraphicsBackend, Settings, GRAPHICS_BACKEND_ENV};
 use crate::versions;
 use serde::Serialize;
 use std::fs;
@@ -42,6 +43,7 @@ pub struct LaunchPlan {
     pub workdir: PathBuf,
     pub data_dir: PathBuf,
     pub logs_dir: PathBuf,
+    pub graphics_backend: GraphicsBackend,
 }
 
 /// Resolves the active version and checks the installed data against it.
@@ -65,7 +67,18 @@ pub fn plan(layout: &Layout, settings: &Settings, game: &str) -> Result<LaunchPl
         workdir: v.dir,
         data_dir,
         logs_dir: layout.logs_dir(),
+        graphics_backend: usable_backend(settings.graphics_backend(game), std::env::consts::OS),
     })
+}
+
+/// A choice this system cannot use (settings copied from another OS: DirectX 12 on Linux) falls back
+/// to automatic instead of a game that finds no graphics card.
+fn usable_backend(b: GraphicsBackend, os: &str) -> GraphicsBackend {
+    if b.available_on(os) {
+        b
+    } else {
+        GraphicsBackend::Auto
+    }
 }
 
 /// Last `error: ...` line of a runtime log.
@@ -93,6 +106,15 @@ pub struct GameProcess {
 pub fn command(runtime: &Path, workdir: &Path, data_dir: &Path) -> Command {
     let mut c = Command::new(runtime);
     c.arg("--data-dir").arg(data_dir).env(DATA_DIR_ENV, data_dir).current_dir(workdir);
+    c
+}
+
+/// [`command`] plus the plan's options. `Auto` leaves `WGPU_BACKEND` as the launcher inherited it.
+fn game_command(p: &LaunchPlan) -> Command {
+    let mut c = command(&p.runtime, &p.workdir, &p.data_dir);
+    if let Some(b) = p.graphics_backend.env_value() {
+        c.env(GRAPHICS_BACKEND_ENV, b);
+    }
     c
 }
 
@@ -124,11 +146,13 @@ impl GameProcess {
             log_path = p.logs_dir.join(format!("{game}-{unix}-{n}.log"));
         }
         let mut log = fs::File::create(&log_path).map_err(|e| e.to_string())?;
+        let backend = p.graphics_backend.env_value();
         {
             use std::io::Write;
             let _ = writeln!(
                 log,
-                "$ {} --data-dir {}   (ReRAC {}, from {})",
+                "$ {}{} --data-dir {}   (ReRAC {}, from {})",
+                backend.map_or(String::new(), |b| format!("{GRAPHICS_BACKEND_ENV}={b} ")),
                 p.runtime.display(),
                 p.data_dir.display(),
                 p.version,
@@ -136,7 +160,7 @@ impl GameProcess {
             );
         }
         let log_err = log.try_clone().map_err(|e| e.to_string())?;
-        let mut cmd = command(&p.runtime, &p.workdir, &p.data_dir);
+        let mut cmd = game_command(p);
         cmd.envs(extra_env.iter().copied());
         let child: Child = cmd
             .stdin(Stdio::null())
@@ -194,6 +218,30 @@ mod tests {
     }
 
     #[test]
+    fn graphics_backend_sets_wgpu_backend_unless_auto() {
+        let mut p = LaunchPlan {
+            game: "rac1".into(),
+            version: "0.1.0".into(),
+            runtime: "/v/bin/rerac".into(),
+            workdir: "/v".into(),
+            data_dir: "/r/games/rac1/data".into(),
+            logs_dir: "/r/logs".into(),
+            graphics_backend: GraphicsBackend::Auto,
+        };
+        let backend_env = |p: &LaunchPlan| {
+            game_command(p)
+                .get_envs()
+                .find(|(k, _)| *k == GRAPHICS_BACKEND_ENV)
+                .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+        };
+        assert_eq!(backend_env(&p), None);
+        p.graphics_backend = GraphicsBackend::Dx12;
+        assert_eq!(backend_env(&p), Some(Some("dx12".into())));
+        p.graphics_backend = GraphicsBackend::Vulkan;
+        assert_eq!(backend_env(&p), Some(Some("vulkan".into())));
+    }
+
+    #[test]
     fn finds_the_runtime_error_line() {
         assert_eq!(
             error_line("booting\nerror: data_format 2 does not match 1\n"),
@@ -224,6 +272,7 @@ mod tests {
             workdir: t.0.clone(),
             data_dir: t.0.join("data"),
             logs_dir: t.0.join("logs"),
+            graphics_backend: GraphicsBackend::Auto,
         };
         let (tx, rx) = std::sync::mpsc::channel();
         let log = gp.launch(&plan, &[], move |p| tx.send(p).unwrap()).unwrap();
@@ -269,5 +318,18 @@ mod tests {
         assert_eq!(p.workdir, v);
         assert_eq!(p.data_dir, data);
         assert_eq!(p.logs_dir, layout.logs_dir());
+        assert_eq!(p.graphics_backend, GraphicsBackend::Auto);
+        s.set_graphics_backend("rac1", GraphicsBackend::Dx12);
+        let want = if cfg!(windows) { GraphicsBackend::Dx12 } else { GraphicsBackend::Auto };
+        assert_eq!(plan(&layout, &s, "rac1").unwrap().graphics_backend, want);
+    }
+
+    #[test]
+    fn a_backend_from_another_system_falls_back_to_auto() {
+        assert_eq!(usable_backend(GraphicsBackend::Dx12, "windows"), GraphicsBackend::Dx12);
+        assert_eq!(usable_backend(GraphicsBackend::Dx12, "linux"), GraphicsBackend::Auto);
+        assert_eq!(usable_backend(GraphicsBackend::Vulkan, "linux"), GraphicsBackend::Vulkan);
+        assert_eq!(usable_backend(GraphicsBackend::Vulkan, "macos"), GraphicsBackend::Auto);
+        assert_eq!(usable_backend(GraphicsBackend::Auto, "macos"), GraphicsBackend::Auto);
     }
 }

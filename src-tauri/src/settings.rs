@@ -1,7 +1,8 @@
 //! Launcher settings, persisted as JSON at `<data root>/settings/launcher.json`.
 
 use crate::versions::{SourceId, VersionRef};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -21,6 +22,8 @@ pub struct Settings {
     pub ntsc_only: bool,
     /// Minimise the launcher window while the game runs (restored when it exits).
     pub minimize_while_playing: bool,
+    /// Per-game options (the game's ⋯ menu), by game id. Games left at the defaults have no entry.
+    pub games: BTreeMap<String, GameSettings>,
 }
 
 impl Default for Settings {
@@ -32,6 +35,59 @@ impl Default for Settings {
             dev_versions: Vec::new(),
             ntsc_only: false,
             minimize_while_playing: false,
+            games: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GameSettings {
+    pub graphics_backend: GraphicsBackend,
+}
+
+/// The graphics API the game renders with, passed as `WGPU_BACKEND` (read by Bevy/wgpu at start).
+/// `Auto` sets nothing, so the game makes its own choice (Vulkan where available).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GraphicsBackend {
+    #[default]
+    Auto,
+    Vulkan,
+    Dx12,
+}
+
+/// Anything unknown (a value from a newer launcher, a typo) reads as `Auto` instead of making the
+/// whole settings file unreadable.
+impl<'de> Deserialize<'de> for GraphicsBackend {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(match serde_json::Value::deserialize(d)?.as_str() {
+            Some("vulkan") => GraphicsBackend::Vulkan,
+            Some("dx12") => GraphicsBackend::Dx12,
+            _ => GraphicsBackend::Auto,
+        })
+    }
+}
+
+/// wgpu's environment variable for the backend list.
+pub const GRAPHICS_BACKEND_ENV: &str = "WGPU_BACKEND";
+
+impl GraphicsBackend {
+    /// The `WGPU_BACKEND` value, or `None` to leave the choice to the game.
+    pub fn env_value(self) -> Option<&'static str> {
+        match self {
+            GraphicsBackend::Auto => None,
+            GraphicsBackend::Vulkan => Some("vulkan"),
+            GraphicsBackend::Dx12 => Some("dx12"),
+        }
+    }
+
+    /// Whether the game can use it on `os` (`std::env::consts::OS`).
+    pub fn available_on(self, os: &str) -> bool {
+        match self {
+            GraphicsBackend::Auto => true,
+            GraphicsBackend::Vulkan => matches!(os, "windows" | "linux"),
+            GraphicsBackend::Dx12 => os == "windows",
         }
     }
 }
@@ -96,6 +152,18 @@ impl Settings {
             self.active_version = None;
         }
     }
+
+    pub fn graphics_backend(&self, game: &str) -> GraphicsBackend {
+        self.games.get(game).map(|g| g.graphics_backend).unwrap_or_default()
+    }
+
+    pub fn set_graphics_backend(&mut self, game: &str, backend: GraphicsBackend) {
+        let entry = self.games.entry(game.to_string()).or_default();
+        entry.graphics_backend = backend;
+        if *entry == GameSettings::default() {
+            self.games.remove(game);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -128,6 +196,35 @@ mod tests {
         assert_eq!(s.official, OfficialSettings::default());
         fs::write(&file, "not json").unwrap();
         assert_eq!(Settings::load(&file), Settings::default());
+    }
+
+    #[test]
+    fn graphics_backend_is_per_game_and_tolerant() {
+        let t = TempDir::new("settings-graphics");
+        let file = t.0.join("launcher.json");
+        let mut s = Settings::default();
+        assert_eq!(s.graphics_backend("rac1"), GraphicsBackend::Auto);
+        s.set_graphics_backend("rac1", GraphicsBackend::Dx12);
+        assert_eq!(s.graphics_backend("rac1"), GraphicsBackend::Dx12);
+        assert_eq!(s.graphics_backend("rac2"), GraphicsBackend::Auto);
+        s.save(&file).unwrap();
+        assert!(fs::read_to_string(&file).unwrap().contains(r#""graphics_backend": "dx12""#));
+        assert_eq!(Settings::load(&file), s);
+        // Back to the default drops the entry, so the file stays as an older launcher wrote it.
+        s.set_graphics_backend("rac1", GraphicsBackend::Auto);
+        assert!(s.games.is_empty());
+
+        // An unknown value keeps the rest of the settings.
+        fs::write(&file, r#"{"ntsc_only":true,"games":{"rac1":{"graphics_backend":"metal"},"rac2":{"graphics_backend":7}}}"#).unwrap();
+        let s = Settings::load(&file);
+        assert!(s.ntsc_only);
+        assert_eq!(s.graphics_backend("rac1"), GraphicsBackend::Auto);
+        assert_eq!(s.graphics_backend("rac2"), GraphicsBackend::Auto);
+
+        assert_eq!(GraphicsBackend::Vulkan.env_value(), Some("vulkan"));
+        assert_eq!(GraphicsBackend::Auto.env_value(), None);
+        assert!(GraphicsBackend::Dx12.available_on("windows") && !GraphicsBackend::Dx12.available_on("linux"));
+        assert!(!GraphicsBackend::Vulkan.available_on("macos"));
     }
 
     #[test]

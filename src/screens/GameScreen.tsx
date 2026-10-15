@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { errorText } from "../backend/api";
-import type { ExportKind, GameStatus, Stage } from "../backend/contract";
+import type { ExportKind, GameStatus, GraphicsBackend, Stage } from "../backend/contract";
 import { Backdrop } from "../components/Backdrop";
-import { IconDisc, IconDots, IconDownload, IconFolder, IconPlay, IconRefresh, IconShield, IconTrash, IconWarn } from "../components/Icons";
+import { IconChip, IconDisc, IconDots, IconDownload, IconFolder, IconPlay, IconRefresh, IconShield, IconTrash, IconWarn } from "../components/Icons";
 import type { Backend } from "../backend/api";
 import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
@@ -10,12 +10,13 @@ import { ProgressBar } from "../components/ProgressBar";
 import { friendlyError, friendlyExportError, friendlyRuntimeError } from "../lib/errors";
 import { formatBytes, formatDuration, prettySerial } from "../lib/format";
 import type { GameDef } from "../lib/games";
+import { graphicsBackendLabel, graphicsBackendOf, graphicsBackendsFor } from "../lib/graphics";
 import { useLauncher, type JobResult, type JobView } from "../state";
 
 export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => void }) {
-  const { backend, snapshot, job, results, clearResult, statusTick, bumpStatus, run, toast, refresh } = useLauncher();
+  const { backend, snapshot, setSnapshot, job, results, clearResult, statusTick, bumpStatus, run, toast, refresh } = useLauncher();
   const [status, setStatus] = useState<GameStatus | null>(null);
-  const [confirm, setConfirm] = useState<"uninstall" | "reextract" | "export" | null>(null);
+  const [confirm, setConfirm] = useState<"uninstall" | "reextract" | "export" | "graphics" | null>(null);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -37,6 +38,9 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
   const installed = !!status?.installed;
   const running = !!status?.running || snapshot?.game_running === game.id;
   const hasVersion = !!snapshot?.active && !snapshot.active.problem;
+  const graphics = graphicsBackendOf(snapshot?.settings, game.id);
+  // Only offered where there is something to choose besides Automatic (not on macOS: Metal only).
+  const graphicsChoices = graphicsBackendsFor(snapshot?.platform);
 
   async function install() {
     const iso = await run(() => backend.pickIso());
@@ -73,6 +77,16 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
     setConfirm(null);
     clearResult(game.id);
     await run(() => backend.startExport(game.id, to, what));
+  }
+
+  async function saveGraphics(choice: GraphicsBackend) {
+    setConfirm(null);
+    if (choice === graphics) return;
+    const snap = await run(() => backend.setGraphicsBackend(game.id, choice));
+    if (snap) {
+      setSnapshot(snap);
+      toast(`Graphics: ${graphicsBackendLabel(choice)}. ${running ? "Used from the next start." : "Used when you press Play."}`, "ok");
+    }
   }
 
   async function uninstall() {
@@ -127,6 +141,9 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
           label="More options"
           items={[
             { label: "Open data folder", icon: <IconFolder size={18} />, onSelect: () => void run(() => backend.openFolder(`game:${game.id}`)) },
+            ...(graphicsChoices.length > 1
+              ? [{ label: `Graphics: ${graphicsBackendLabel(graphics)}…`, icon: <IconChip size={18} />, onSelect: () => setConfirm("graphics") }]
+              : []),
             { label: "Verify files", icon: <IconShield size={18} />, onSelect: verify, disabled: running },
             { label: "Export assets…", icon: <IconDownload size={18} />, onSelect: () => setConfirm("export"), disabled: running },
             { label: "Re-extract from ISO", icon: <IconRefresh size={18} />, onSelect: () => setConfirm("reextract"), disabled: running },
@@ -176,6 +193,7 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
             <p className="gs-meta">
               {prettySerial(status.info.disc)} · {status.info.files} files · {formatBytes(status.info.bytes)}
               {status.info.ntsc_only ? " · NTSC-only" : ""}
+              {graphics !== "auto" ? ` · ${graphicsBackendLabel(graphics)}` : ""}
             </p>
           )}
         </div>
@@ -192,6 +210,15 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
       )}
       {confirm === "export" && status && (
         <ExportModal game={game.id} initialDir={status.export_dir} onStart={startExport} onClose={() => setConfirm(null)} />
+      )}
+      {confirm === "graphics" && (
+        <GraphicsModal
+          current={graphics}
+          choices={graphicsChoices}
+          running={running}
+          onSave={saveGraphics}
+          onClose={() => setConfirm(null)}
+        />
       )}
       {confirm === "reextract" && (
         <Modal
@@ -388,6 +415,38 @@ function StalePanel({ status, onReextract }: { status: GameStatus; onReextract()
         </button>
       </div>
     </div>
+  );
+}
+
+function GraphicsModal({
+  current,
+  choices,
+  running,
+  onSave,
+  onClose,
+}: {
+  current: GraphicsBackend;
+  choices: ReturnType<typeof graphicsBackendsFor>;
+  running: boolean;
+  onSave(choice: GraphicsBackend): void;
+  onClose(): void;
+}) {
+  const [choice, setChoice] = useState(current);
+  return (
+    <Modal title="Graphics backend" confirmLabel="Save" onConfirm={() => onSave(choice)} onClose={onClose}>
+      <p>The graphics API the game draws with. Your in-game options and saves are not affected.</p>
+      {choices.map((b) => (
+        <label className="toggle" key={b.id}>
+          <input type="radio" name="graphics-backend" checked={choice === b.id} onChange={() => setChoice(b.id)} />
+          <span className="toggle-ui is-radio" aria-hidden="true" />
+          <span>
+            <b>{b.label}</b>
+            <span className="muted"> — {b.hint}</span>
+          </span>
+        </label>
+      ))}
+      {running && <p className="muted small">The game is running: the change applies the next time it starts.</p>}
+    </Modal>
   );
 }
 

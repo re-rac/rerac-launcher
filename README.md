@@ -43,7 +43,8 @@ repository (see [Running a local build of the game](#running-a-local-build-of-th
    The active version's extractor checks the disc, copies the data (about 4.5 GB) and prepares it.
 3. **Play.** The launcher starts the game with the extracted data and shows *Running…* until it exits.
 4. **Optional:** the game screen's **⋯** menu has **Export assets…** (textures, audio, models, levels, collision and
-   text as PNG, WAV, glTF and JSON) and **Re-extract from ISO**.
+   text as PNG, WAV, glTF and JSON) and **Re-extract from ISO**. On Windows and Linux it also has **Graphics**, to
+   choose the game's graphics backend: Automatic, Vulkan, or DirectX 12 (Windows) if the game window stays black.
 
 If the game cannot start, the launcher says why and offers **Re-extract** when the data is missing, incomplete or
 made for another version.
