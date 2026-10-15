@@ -300,10 +300,12 @@ mod tests {
     fn dev_refs_must_be_registered() {
         let l = Layout::new("/r");
         let mut s = Settings::default();
-        let r = VersionRef { source: SourceId::Development, id: "/b".into() };
+        // Absolute on the host: "/b" has no drive letter, so Windows treats it as relative.
+        let abs = if cfg!(windows) { r"C:\b" } else { "/b" };
+        let r = VersionRef { source: SourceId::Development, id: abs.into() };
         assert!(version_dir(&l, &s, &r).is_err());
-        s.add_dev_version("/b".into());
-        assert_eq!(version_dir(&l, &s, &r).unwrap(), PathBuf::from("/b"));
+        s.add_dev_version(abs.into());
+        assert_eq!(version_dir(&l, &s, &r).unwrap(), PathBuf::from(abs));
     }
 
     #[test]
