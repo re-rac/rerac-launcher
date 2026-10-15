@@ -10,6 +10,7 @@ import type {
   ExportKind,
   FinishedPayload,
   GameStatus,
+  GraphicsBackend,
   OfficialRelease,
   VersionInfo,
   VersionRef,
@@ -40,6 +41,8 @@ export interface Backend {
   /** Shows a log file (inside the logs folder) in the file manager. */
   openLog(path: string): Promise<void>;
   setMinimizeWhilePlaying(value: boolean): Promise<AppSnapshot>;
+  /** Used from the game's next start. */
+  setGraphicsBackend(game: string, backend: GraphicsBackend): Promise<AppSnapshot>;
 
   openFolder(which: FolderId): Promise<void>;
   openUrl(url: string): Promise<void>;

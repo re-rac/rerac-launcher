@@ -36,6 +36,7 @@ export function createTauriBackend(): Backend {
     launchGame: (game) => invoke<void>("launch_game", { game }),
     openLog: (path) => invoke<void>("open_log", { path }),
     setMinimizeWhilePlaying: (value) => invoke<AppSnapshot>("set_minimize_while_playing", { value }),
+    setGraphicsBackend: (game, backend) => invoke<AppSnapshot>("set_graphics_backend", { game, backend }),
     openFolder: (which) => invoke<void>("open_folder", { which }),
     openUrl: (url) => invoke<void>("open_url", { url }),
     pickFolder: (title) => invoke<string | null>("pick_folder", { title }),

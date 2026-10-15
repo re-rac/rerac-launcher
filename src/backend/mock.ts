@@ -8,6 +8,7 @@
 //   ?zip=<file name>   what the fake .zip dialog returns ("bad" in the name: not a build)
 //   ?autoplay=1        press Play on load (for screenshots of the launch path)
 //   ?export=fail31     the next export fails with that code
+//   ?platform=windows  pretend to be on that system (macos | windows | linux), e.g. for the DirectX 12 option
 
 import type { Backend, Unlisten } from "./api";
 import type {
@@ -130,6 +131,7 @@ export function createMockBackend(): Backend {
     dev_versions: noVersion ? [] : [{ path: DEV_BUILD }, { path: `${HOME}/Downloads/rerac-old` }],
     ntsc_only: false,
     minimize_while_playing: false,
+    games: {},
   };
   // Launcher-installed development versions (from "Install from zip…"), by folder name.
   const installedZips = new Set<string>(noVersion ? [] : ["0.1.0"]);
@@ -153,7 +155,7 @@ export function createMockBackend(): Backend {
 
   const snapshot = (): AppSnapshot => ({
     launcher_version: "0.1.0",
-    platform: /Mac/.test(navigator.userAgent) ? "macos" : /Win/.test(navigator.userAgent) ? "windows" : "linux",
+    platform: params.get("platform") ?? (/Mac/.test(navigator.userAgent) ? "macos" : /Win/.test(navigator.userAgent) ? "windows" : "linux"),
     data_root: dataRoot,
     default_data_root: DEFAULT_ROOT,
     settings: structuredClone(settings),
@@ -359,6 +361,11 @@ export function createMockBackend(): Backend {
     openLog: async (path) => console.info("[mock] reveal log", path),
     setMinimizeWhilePlaying: async (value) => {
       settings.minimize_while_playing = value;
+      return snapshot();
+    },
+    setGraphicsBackend: async (game, backend) => {
+      if (backend === "auto") delete settings.games[game];
+      else settings.games[game] = { graphics_backend: backend };
       return snapshot();
     },
     openUrl: async (url) => console.info("[mock] open url", url),

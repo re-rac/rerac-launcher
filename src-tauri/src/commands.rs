@@ -7,7 +7,7 @@ use crate::github;
 use crate::install;
 use crate::launch::{self, ExitedPayload, GameProcess};
 use crate::paths::{self, Layout};
-use crate::settings::Settings;
+use crate::settings::{GraphicsBackend, Settings};
 use crate::versions::{self, SourceId, VersionInfo, VersionRef};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -389,6 +389,23 @@ pub fn open_log(app: AppHandle, st: State<'_, Launcher>, path: String) -> CmdRes
 #[tauri::command]
 pub fn set_minimize_while_playing(app: AppHandle, st: State<'_, Launcher>, value: bool) -> CmdResult<AppSnapshot> {
     st.update_settings(|s| s.minimize_while_playing = value)?;
+    Ok(snapshot(&app, &st))
+}
+
+/// The game's graphics backend (`WGPU_BACKEND`). Takes effect the next time the game starts, so it
+/// can change while the game runs.
+#[tauri::command]
+pub fn set_graphics_backend(
+    app: AppHandle,
+    st: State<'_, Launcher>,
+    game: String,
+    backend: GraphicsBackend,
+) -> CmdResult<AppSnapshot> {
+    check_installable(&game)?;
+    if !backend.available_on(std::env::consts::OS) {
+        return Err("That graphics backend is not available on this system.".into());
+    }
+    st.update_settings(|s| s.set_graphics_backend(&game, backend))?;
     Ok(snapshot(&app, &st))
 }
 

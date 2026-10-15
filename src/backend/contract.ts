@@ -96,6 +96,15 @@ export interface Settings {
   dev_versions: { path: string }[];
   ntsc_only: boolean;
   minimize_while_playing: boolean;
+  /** Per-game options by game id; games at the defaults have no entry. */
+  games: Partial<Record<string, GameSettings>>;
+}
+
+/** Passed to the game as `WGPU_BACKEND`; `auto` sets nothing. */
+export type GraphicsBackend = "auto" | "vulkan" | "dx12";
+
+export interface GameSettings {
+  graphics_backend: GraphicsBackend;
 }
 
 export type JobKind = "extract" | "verify" | "export";

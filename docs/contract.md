@@ -76,6 +76,9 @@ On success the extractor writes `<game_data_dir>/extract-info.json`:
   and exits.
 - The launcher starts the game with `<runtime> --data-dir <game_data_dir>`. The env var
   `RC_DATA_DIR` is equivalent; the launcher sets both.
+- When the player picks a graphics backend for the game (⋯ → Graphics), the launcher also sets
+  `WGPU_BACKEND=vulkan` or `WGPU_BACKEND=dx12` (Windows only), which Bevy/wgpu read at start-up.
+  Automatic, the default, sets nothing and the runtime chooses. The game log's first line shows it.
 - Game side (clarification): `--version-json` answers in milliseconds without opening a window.
   `--data-dir <dir>` / `--data-dir=<dir>` wins over `RC_DATA_DIR`. The folder must hold `toc.bin`
   and an `extract-info.json` with the build's `data_format`.
