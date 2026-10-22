@@ -21,10 +21,10 @@ type CmdResult<T> = Result<T, String>;
 
 /// Games the launcher knows. Only these ids are accepted from the page.
 pub const GAMES: [&str; 4] = ["rac1", "rac2", "rac3", "rac4"];
-/// Games that are playable for everyone today. Another game becomes playable once a build of it
-/// is installed or added ([`playable`]): Going Commando's testers use development builds while
-/// its repository is private.
-pub const INSTALLABLE: [&str; 1] = ["rac1"];
+/// Games that are playable for everyone today (Going Commando's builds come from its own feed,
+/// re-rac/rerac2, or a development build). Another game becomes playable once a build of it is
+/// installed or added ([`playable`]).
+pub const INSTALLABLE: [&str; 2] = ["rac1", "rac2"];
 
 pub struct Launcher {
     pub default_root: PathBuf,

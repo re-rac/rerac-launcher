@@ -27,7 +27,7 @@ export interface GameDef {
 
 export const GAMES: GameDef[] = [
   { id: "rac1", title: "Ratchet & Clank", subtitle: "Ratchet & Clank", year: 2002, logo: artFor("rac1", "logo"), bg: artFor("rac1", "bg"), accent: "#f28c28", supported: true },
-  { id: "rac2", title: "Going Commando", subtitle: "Ratchet & Clank 2", year: 2003, logo: artFor("rac2", "logo"), bg: artFor("rac2", "bg"), accent: "#4fb8ff", supported: false },
+  { id: "rac2", title: "Going Commando", subtitle: "Ratchet & Clank 2", year: 2003, logo: artFor("rac2", "logo"), bg: artFor("rac2", "bg"), accent: "#4fb8ff", supported: true },
   { id: "rac3", title: "Up Your Arsenal", subtitle: "Ratchet & Clank 3", year: 2004, logo: artFor("rac3", "logo"), bg: artFor("rac3", "bg"), accent: "#ffcf3a", supported: false },
   { id: "rac4", title: "Deadlocked", subtitle: "Ratchet: Deadlocked", year: 2005, logo: artFor("rac4", "logo"), bg: artFor("rac4", "bg"), accent: "#e8433a", supported: false },
 ];
