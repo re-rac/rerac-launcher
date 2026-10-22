@@ -10,7 +10,7 @@ use crate::paths::{self, Layout};
 use crate::settings::Settings;
 use crate::versions::{self, SourceId, VersionInfo, VersionRef};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, RwLock};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -20,8 +20,10 @@ use tauri_plugin_opener::OpenerExt;
 type CmdResult<T> = Result<T, String>;
 
 /// Games the launcher knows. Only these ids are accepted from the page.
-pub const GAMES: [&str; 3] = ["rac1", "rac2", "rac3"];
-/// Games that can be installed today.
+pub const GAMES: [&str; 4] = ["rac1", "rac2", "rac3", "rac4"];
+/// Games that are playable for everyone today. Another game becomes playable once a build of it
+/// is installed or added ([`playable`]): Going Commando's testers use development builds while
+/// its repository is private.
 pub const INSTALLABLE: [&str; 1] = ["rac1"];
 
 pub struct Launcher {
@@ -95,9 +97,23 @@ fn check_game(game: &str) -> CmdResult<()> {
     }
 }
 
-fn check_installable(game: &str) -> CmdResult<()> {
+/// Games that can be installed and played: [`INSTALLABLE`], plus every game a listed version
+/// is a build of.
+pub fn playable(layout: &Layout, settings: &Settings) -> Vec<String> {
+    let mut games: Vec<String> = INSTALLABLE.iter().map(|g| g.to_string()).collect();
+    for v in versions::list(layout, settings) {
+        if let Some(m) = v.manifest {
+            if GAMES.contains(&m.game.as_str()) && !games.contains(&m.game) {
+                games.push(m.game);
+            }
+        }
+    }
+    games
+}
+
+fn check_installable(st: &Launcher, game: &str) -> CmdResult<()> {
     check_game(game)?;
-    if INSTALLABLE.contains(&game) {
+    if playable(&st.layout(), &st.settings()).iter().any(|g| g == game) {
         Ok(())
     } else {
         Err("This game is not supported yet.".into())
@@ -124,35 +140,51 @@ pub struct AppSnapshot {
     pub data_root: PathBuf,
     pub default_data_root: PathBuf,
     pub settings: Settings,
-    pub active: Option<ActiveSummary>,
+    /// Each game's chosen version, by game id.
+    pub actives: BTreeMap<String, ActiveSummary>,
+    /// The games that can be installed and played ([`playable`]).
+    pub playable: Vec<String>,
+    /// Each known game's release feed (its own or the default; `None`: no releases yet).
+    pub feeds: BTreeMap<String, Option<crate::settings::OfficialSettings>>,
     pub job: Option<JobState>,
     pub game_running: Option<String>,
+    /// A newer launcher, downloaded and ready for "Restart to update" (`crate::updates`).
+    pub launcher_update: Option<crate::updates::UpdateInfo>,
 }
 
 fn snapshot(app: &AppHandle, st: &Launcher) -> AppSnapshot {
     let layout = st.layout();
     let settings = st.settings();
-    let active = settings.active_version.clone().map(|vref| {
-        match versions::resolve(&layout, &settings, &vref) {
-            Ok(v) => ActiveSummary {
-                vref,
-                version: Some(v.manifest.version),
-                game: Some(v.manifest.game),
-                data_format: Some(v.manifest.data_format),
-                problem: None,
-            },
-            Err(e) => ActiveSummary { vref, version: None, game: None, data_format: None, problem: Some(e) },
-        }
-    });
+    let actives = settings
+        .active_versions
+        .iter()
+        .map(|(game, vref)| {
+            let vref = vref.clone();
+            let summary = match versions::resolve_active(&layout, &settings, game) {
+                Ok(v) => ActiveSummary {
+                    vref,
+                    version: Some(v.manifest.version),
+                    game: Some(v.manifest.game),
+                    data_format: Some(v.manifest.data_format),
+                    problem: None,
+                },
+                Err(e) => ActiveSummary { vref, version: None, game: None, data_format: None, problem: Some(e) },
+            };
+            (game.clone(), summary)
+        })
+        .collect();
     AppSnapshot {
         launcher_version: app.package_info().version.to_string(),
         platform: std::env::consts::OS,
         data_root: layout.root.clone(),
         default_data_root: st.default_root.clone(),
+        playable: playable(&layout, &settings),
+        feeds: GAMES.iter().map(|g| (g.to_string(), settings.feed(g))).collect(),
         settings,
-        active,
+        actives,
         job: st.jobs.current(),
         game_running: st.game.running(),
+        launcher_update: app.state::<crate::updates::LauncherUpdate>().info(),
     }
 }
 
@@ -170,11 +202,11 @@ pub struct GameStatus {
     pub data_dir: PathBuf,
     pub installed: bool,
     pub info: Option<ExtractInfo>,
-    /// Installed data has a different `data_format` than the active version expects.
+    /// Installed data has a different `data_format` than the game's chosen version expects.
     pub stale: bool,
-    /// The active version's `data_format` (`None` without a usable active version).
+    /// The chosen version's `data_format` (`None` without a usable chosen version).
     pub expected_format: Option<u32>,
-    /// The active version's `version`, for messages.
+    /// The chosen version's `version`, for messages.
     pub active_version: Option<String>,
     pub job: Option<JobState>,
     pub running: bool,
@@ -189,7 +221,7 @@ pub fn game_status(game: String, st: State<'_, Launcher>) -> CmdResult<GameStatu
     let settings = st.settings();
     let data_dir = layout.game_data_dir(&game);
     let info = extractor::read_install(&data_dir);
-    let active = versions::resolve_active(&layout, &settings).ok();
+    let active = versions::resolve_active(&layout, &settings, &game).ok();
     let expected = active.as_ref().map(|v| v.manifest.data_format);
     let stale = matches!((&info, expected), (Some(i), Some(f)) if i.data_format != f);
     Ok(GameStatus {
@@ -234,17 +266,14 @@ fn ensure_iso(p: &Path) -> CmdResult<()> {
 }
 
 fn job_spec(st: &Launcher, game: &str, kind: JobKind, iso: Option<PathBuf>) -> CmdResult<JobSpec> {
-    check_installable(game)?;
+    check_installable(st, game)?;
     if st.game.running().is_some() {
         return Err("Close the game first.".into());
     }
     let layout = st.layout();
     let settings = st.settings();
-    // The extractor always comes from the active version.
-    let v = versions::resolve_active(&layout, &settings)?;
-    if v.manifest.game != game {
-        return Err(format!("The active version is for {}, not {game}.", v.manifest.game));
-    }
+    // The extractor always comes from the game's chosen version.
+    let v = versions::resolve_active(&layout, &settings, game)?;
     Ok(JobSpec::new(kind, game, &v, &layout, iso, settings.ntsc_only))
 }
 
@@ -299,8 +328,8 @@ pub fn export_dir_for(picked: &Path, game: &str) -> PathBuf {
 }
 
 #[tauri::command]
-pub fn export_target(game: String, picked: String) -> CmdResult<String> {
-    check_installable(&game)?;
+pub fn export_target(st: State<'_, Launcher>, game: String, picked: String) -> CmdResult<String> {
+    check_installable(&st, &game)?;
     let p = PathBuf::from(picked);
     if !p.is_absolute() {
         return Err("Choose an absolute folder.".into());
@@ -335,7 +364,7 @@ pub fn cancel_job(st: State<'_, Launcher>) -> bool {
 
 #[tauri::command]
 pub fn uninstall_game(st: State<'_, Launcher>, game: String) -> CmdResult<()> {
-    check_installable(&game)?;
+    check_installable(&st, &game)?;
     if st.jobs.is_busy() || st.game.running().is_some() {
         return Err("Wait for the running job or game to finish first.".into());
     }
@@ -346,11 +375,11 @@ pub fn uninstall_game(st: State<'_, Launcher>, game: String) -> CmdResult<()> {
     Ok(())
 }
 
-/// Starts `<active version>/rerac --data-dir <games/<game>/data>`. The page shows the running
+/// Starts `<the game's chosen version>/rerac --data-dir <games/<game>/data>`. The page shows the running
 /// state from the snapshot and gets `game://exited` (code, `error:` line, log path) at the end.
 #[tauri::command]
 pub fn launch_game(app: AppHandle, st: State<'_, Launcher>, game: String) -> CmdResult<()> {
-    check_installable(&game)?;
+    check_installable(&st, &game)?;
     if st.jobs.is_busy() {
         return Err("Wait for the extractor to finish first.".into());
     }
@@ -559,7 +588,7 @@ fn installed_info(st: &Launcher, i: install::Installed) -> VersionInfo {
     }
 }
 
-/// "Install from zip…": unpacks a build zip into `versions/development/<version>/`.
+/// "Install from zip…": unpacks a build zip into `versions/development/<game>-<version>/`.
 #[tauri::command]
 pub async fn install_version_zip(st: State<'_, Launcher>, path: String) -> CmdResult<VersionInfo> {
     check_idle(&st)?;
@@ -569,7 +598,7 @@ pub async fn install_version_zip(st: State<'_, Launcher>, path: String) -> CmdRe
     }
     let dir = st.layout().source_dir(SourceId::Development.dir_name());
     let installed = tauri::async_runtime::spawn_blocking(move || {
-        install::install_archive(&zip, SourceId::Development, &dir, None, &INSTALLABLE)
+        install::install_archive(&zip, SourceId::Development, &dir, None, None, &GAMES)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -586,11 +615,7 @@ pub fn uninstall_version(app: AppHandle, st: State<'_, Launcher>, vref: VersionR
     }
     let dir = versions::version_dir(&st.layout(), &st.settings(), &vref)?;
     extractor::remove_dir_if_exists(&dir).map_err(|e| format!("Could not remove {}: {e}", dir.display()))?;
-    st.update_settings(|s| {
-        if s.is_active(&vref) {
-            s.active_version = None;
-        }
-    })?;
+    st.update_settings(|s| s.clear_active(&vref))?;
     Ok(snapshot(&app, &st))
 }
 
@@ -610,7 +635,7 @@ pub fn remove_dev_version(app: AppHandle, st: State<'_, Launcher>, path: String)
     Ok(snapshot(&app, &st))
 }
 
-/// Validates the version fully, then makes it active.
+/// Validates the version fully, then makes it the chosen version of the game its manifest names.
 #[tauri::command]
 pub async fn set_active_version(app: AppHandle, st: State<'_, Launcher>, vref: VersionRef) -> CmdResult<AppSnapshot> {
     if st.jobs.is_busy() || st.game.running().is_some() {
@@ -628,57 +653,66 @@ pub async fn set_active_version(app: AppHandle, st: State<'_, Launcher>, vref: V
     if let Some(problem) = info.problem {
         return Err(problem);
     }
-    st.update_settings(|s| s.active_version = Some(vref))?;
+    let game = info.manifest.map(|m| m.game).ok_or("This build has no manifest.")?;
+    check_game(&game)?;
+    st.update_settings(|s| {
+        s.active_versions.insert(game, vref);
+    })?;
     Ok(snapshot(&app, &st))
 }
 
 // ---------------------------------------------------------------------------------------------
-// Official releases (disabled by default)
+// Official releases (each game's own feed)
 
 pub const DOWNLOAD_PROGRESS: &str = "download://progress";
 
-#[tauri::command]
-pub async fn official_releases(st: State<'_, Launcher>) -> CmdResult<Vec<github::OfficialRelease>> {
-    let s = st.settings().official;
-    if !s.enabled {
+/// The feed of `game`, if it has one and it is turned on.
+fn enabled_feed(st: &Launcher, game: &str) -> CmdResult<crate::settings::OfficialSettings> {
+    check_game(game)?;
+    let feed = st.settings().feed(game).ok_or("This game has no releases yet.")?;
+    if !feed.enabled {
         return Err("Official releases are turned off.".into());
     }
+    Ok(feed)
+}
+
+#[tauri::command]
+pub async fn official_releases(st: State<'_, Launcher>, game: String) -> CmdResult<Vec<github::OfficialRelease>> {
+    let s = enabled_feed(&st, &game)?;
     let releases = github::fetch_releases(&s.owner, &s.repo).await?;
-    Ok(github::to_rows(releases, &st.layout().source_dir("official")))
+    Ok(github::to_rows(releases, &st.layout().source_dir("official"), &game))
 }
 
 #[tauri::command]
 pub fn set_official_config(
     app: AppHandle,
     st: State<'_, Launcher>,
+    game: String,
     enabled: bool,
     owner: String,
     repo: String,
 ) -> CmdResult<AppSnapshot> {
+    check_game(&game)?;
     github::releases_url(&owner, &repo)?;
     st.update_settings(|s| {
-        s.official.enabled = enabled;
-        s.official.owner = owner;
-        s.official.repo = repo;
+        s.feeds.insert(game, crate::settings::OfficialSettings { enabled, owner, repo });
     })?;
     Ok(snapshot(&app, &st))
 }
 
 #[derive(Clone, Serialize)]
 struct DownloadProgress {
+    game: String,
     version: String,
     done: u64,
     total: u64,
 }
 
-/// Downloads the platform `.zip` of release `version` and installs it as
-/// `versions/official/<version>/` through the same unpack + validate path as a local zip.
+/// Downloads the platform `.zip` of release `version` of `game` and installs it as
+/// `versions/official/<game>-<version>/` through the same unpack + validate path as a local zip.
 #[tauri::command]
-pub async fn download_official(app: AppHandle, st: State<'_, Launcher>, version: String) -> CmdResult<VersionInfo> {
-    let s = st.settings().official;
-    if !s.enabled {
-        return Err("Official releases are turned off.".into());
-    }
+pub async fn download_official(app: AppHandle, st: State<'_, Launcher>, game: String, version: String) -> CmdResult<VersionInfo> {
+    let s = enabled_feed(&st, &game)?;
     check_idle(&st)?;
     let releases = github::fetch_releases(&s.owner, &s.repo).await?;
     let rel = releases
@@ -688,19 +722,33 @@ pub async fn download_official(app: AppHandle, st: State<'_, Launcher>, version:
     let asset = github::pick_asset(&rel.assets, std::env::consts::OS, std::env::consts::ARCH)
         .cloned()
         .ok_or("This release has no download for your system.")?;
-    let vref = VersionRef { source: SourceId::Official, id: version.clone() };
+    let vref = VersionRef { source: SourceId::Official, id: versions::managed_id(&game, &version) };
     versions::version_dir(&st.layout(), &st.settings(), &vref)?; // the tag must be a usable folder name
     let official = st.layout().source_dir(SourceId::Official.dir_name());
     let file = github::download_asset(&asset, &install::downloads_dir(&official), |done, total| {
-        let _ = app.emit(DOWNLOAD_PROGRESS, DownloadProgress { version: version.clone(), done, total });
+        let _ = app.emit(DOWNLOAD_PROGRESS, DownloadProgress { game: game.clone(), version: version.clone(), done, total });
     })
     .await?;
     let installed = tauri::async_runtime::spawn_blocking(move || {
-        install::install_download(&file, &official, &version, &INSTALLABLE)
+        install::install_download(&file, &official, &game, &version, &GAMES)
     })
     .await
     .map_err(|e| e.to_string())??;
     Ok(installed_info(&st, installed))
+}
+
+/// "Restart to update": installs the downloaded launcher update and restarts into it. Refused
+/// while a game or an extractor job runs.
+#[tauri::command]
+pub fn install_launcher_update(app: AppHandle, st: State<'_, Launcher>) -> CmdResult<()> {
+    if st.game.running().is_some() {
+        return Err("Close the game first, then restart to update.".into());
+    }
+    if st.jobs.is_busy() {
+        return Err("Wait for the running job to finish, then restart to update.".into());
+    }
+    app.state::<crate::updates::LauncherUpdate>().install()?;
+    app.restart()
 }
 
 /// Runs the one-time copy of the pre-rename data root (`paths::migrate_legacy_root`) and returns

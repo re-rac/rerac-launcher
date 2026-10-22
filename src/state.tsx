@@ -164,6 +164,7 @@ export function LauncherProvider({ backend, children }: { backend: Backend; chil
           void backend.getSnapshot().then(setSnapshot);
         }),
       );
+      unlisten.push(await backend.onLauncherUpdate(() => void backend.getSnapshot().then(setSnapshot)));
       // Unmounted while subscribing (StrictMode runs effects twice): drop what we added.
       if (!alive) unlisten.forEach((u) => u());
     })().catch((e) => toast(errorText(e), "warn"));

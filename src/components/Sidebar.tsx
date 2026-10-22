@@ -1,4 +1,5 @@
 import { GAMES } from "../lib/games";
+import { GameLogo } from "./GameLogo";
 import { IconGear, IconHelp } from "./Icons";
 
 export function Sidebar({ route, go }: { route: string[]; go: (p: string) => void }) {
@@ -17,7 +18,7 @@ export function Sidebar({ route, go }: { route: string[]; go: (p: string) => voi
               title={g.supported ? g.title : `${g.title} — coming later`}
             >
               <span className="sb-rail" aria-hidden="true" />
-              <img src={g.logo} alt={g.title} draggable={false} />
+              <GameLogo game={g} />
             </button>
           );
         })}

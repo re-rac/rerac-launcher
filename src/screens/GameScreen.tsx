@@ -4,6 +4,7 @@ import type { ExportKind, GameStatus, Stage } from "../backend/contract";
 import { Backdrop } from "../components/Backdrop";
 import { IconDisc, IconDots, IconDownload, IconFolder, IconPlay, IconRefresh, IconShield, IconTrash, IconWarn } from "../components/Icons";
 import type { Backend } from "../backend/api";
+import { VersionPicker } from "../components/VersionPicker";
 import { Menu } from "../components/Menu";
 import { Modal } from "../components/Modal";
 import { ProgressBar } from "../components/ProgressBar";
@@ -27,7 +28,7 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
     return () => {
       alive = false;
     };
-  }, [backend, game.id, statusTick, toast, snapshot?.game_running, snapshot?.settings.active_version?.id]);
+  }, [backend, game.id, statusTick, toast, snapshot?.game_running, snapshot?.settings.active_versions[game.id]?.id]);
 
   const myJob = job && job.game === game.id ? job : null;
   const result = results[game.id];
@@ -36,7 +37,8 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
   const failed = result && result.status === "error" && result.kind !== "export" ? result : null;
   const installed = !!status?.installed;
   const running = !!status?.running || snapshot?.game_running === game.id;
-  const hasVersion = !!snapshot?.active && !snapshot.active.problem;
+  const active = snapshot?.actives[game.id] ?? null;
+  const hasVersion = !!active && !active.problem;
 
   async function install() {
     const iso = await run(() => backend.pickIso());
@@ -54,7 +56,7 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
       return true;
     });
     if (ok) {
-      toast(`Starting ReRAC${snapshot?.active?.version ? ` v${snapshot.active.version}` : ""}…`, "info");
+      toast(`Starting ${game.title}${active?.version ? ` v${active.version}` : ""}…`, "info");
       bumpStatus();
       void refresh();
     }
@@ -113,7 +115,7 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
       />
     );
   } else if (!hasVersion) {
-    panel = <NoVersionPanel problem={snapshot?.active?.problem ?? null} onOpen={() => go("settings/versions/official")} />;
+    panel = <NoVersionPanel problem={active?.problem ?? null} onOpen={() => go(`settings/versions/official/${game.id}`)} />;
   } else if (installed && status?.stale) {
     panel = <StalePanel status={status} onReextract={install} />;
   } else if (installed) {
@@ -141,7 +143,7 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
     panel = (
       <div className="gs-install">
         <p className="gs-note">
-          Uses your own disc image of the <strong>US release (SCUS-97199)</strong>. The disc is read once; after that the
+          Uses your own disc image of the <strong>US release ({US_DISC[game.id] ?? "NTSC-U"})</strong>. The disc is read once; after that the
           image is no longer needed.
         </p>
         <button className="btn btn-primary btn-lg" onClick={install}>
@@ -179,7 +181,12 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
             </p>
           )}
         </div>
-        <div className="gs-actions">{panel}</div>
+        <div className="gs-actions">
+          <div className="gs-side">
+            <VersionPicker game={game} disabled={running || !!myJob || starting} go={go} />
+            {panel}
+          </div>
+        </div>
       </div>
 
       {confirm === "uninstall" && (
@@ -209,6 +216,9 @@ export function GameScreen({ game, go }: { game: GameDef; go: (p: string) => voi
     </section>
   );
 }
+
+/** The disc each game installs from (the serial printed on the US release). */
+const US_DISC: Partial<Record<string, string>> = { rac1: "SCUS-97199", rac2: "SCUS-97268" };
 
 // `extract` reports identify, copy, then prepare (the engine cache, built from the copied files);
 // files are hashed against the known-good table while they are copied, so there is no separate
@@ -361,8 +371,8 @@ function ErrorPanel({
 function NoVersionPanel({ problem, onOpen }: { problem: string | null; onOpen(): void }) {
   return (
     <div className="panel notice-panel plate">
-      <h3>{problem ? "The active game version can't be used" : "No game version set"}</h3>
-      <p>{problem ?? "Installing and playing need a ReRAC build. Add one under Version Management."}</p>
+      <h3>{problem ? "This version can't be used" : "Choose a version"}</h3>
+      <p>{problem ?? "Pick a build in the Version list above, or download one under Version Management."}</p>
       <div className="ep-actions">
         <button className="btn btn-primary btn-sm" onClick={onOpen}>
           Open Version Management

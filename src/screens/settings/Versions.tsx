@@ -3,13 +3,14 @@ import { errorText, type Backend } from "../../backend/api";
 import type { OfficialRelease, VersionInfo, VersionRef } from "../../backend/contract";
 import { IconCheck, IconDownload, IconFolder, IconInfo, IconPlus, IconRefresh, IconTrash, IconWarn } from "../../components/Icons";
 import { Modal } from "../../components/Modal";
+import { GAMES } from "../../lib/games";
 import { SOURCES } from "../../lib/sources";
 import { useLauncher, type Toast } from "../../state";
 
 /** After switching versions: warn when the installed game data has another data_format. */
-async function warnIfDataMismatch(backend: Backend, toast: (text: string, tone?: Toast["tone"]) => void) {
+async function warnIfDataMismatch(backend: Backend, game: string, toast: (text: string, tone?: Toast["tone"]) => void) {
   try {
-    const st = await backend.gameStatus("rac1");
+    const st = await backend.gameStatus(game);
     if (st.installed && st.stale && st.info) {
       toast(
         `The installed game data is format ${st.info.data_format}, but ReRAC ${st.active_version ?? ""} needs format ${st.expected_format}. Re-extract before playing.`,
@@ -21,10 +22,27 @@ async function warnIfDataMismatch(backend: Backend, toast: (text: string, tone?:
   }
 }
 
-export function Versions({ sub, go }: { sub?: string; go: (p: string) => void }) {
+export function Versions({ sub, game: gameParam, go }: { sub?: string; game?: string; go: (p: string) => void }) {
+  const { snapshot } = useLauncher();
   const current = SOURCES.find((s) => s.id === sub && !s.disabledNote) ?? SOURCES[0];
+  // Each game has its own versions: the games with a release feed or an installed build.
+  const games = GAMES.filter((g) => g.supported || !!snapshot?.feeds[g.id] || !!snapshot?.playable.includes(g.id));
+  const game = games.find((g) => g.id === gameParam) ?? games[0];
   return (
     <div className="stack">
+      <nav className="subtabs game-tabs" role="tablist" aria-label="Game">
+        {games.map((g) => (
+          <button
+            key={g.id}
+            role="tab"
+            aria-selected={game.id === g.id}
+            className={`subtab ${game.id === g.id ? "is-active" : ""}`}
+            onClick={() => go(`settings/versions/${current.id}/${g.id}`)}
+          >
+            {g.title}
+          </button>
+        ))}
+      </nav>
       <nav className="subtabs" role="tablist">
         {SOURCES.map((s) => (
           <button
@@ -33,7 +51,7 @@ export function Versions({ sub, go }: { sub?: string; go: (p: string) => void })
             aria-selected={current.id === s.id}
             disabled={!!s.disabledNote}
             className={`subtab ${current.id === s.id ? "is-active" : ""}`}
-            onClick={() => go(`settings/versions/${s.id}`)}
+            onClick={() => go(`settings/versions/${s.id}/${game.id}`)}
             title={s.disabledNote ? `${s.label}: ${s.disabledNote.toLowerCase()}` : s.blurb}
           >
             {s.label}
@@ -41,7 +59,7 @@ export function Versions({ sub, go }: { sub?: string; go: (p: string) => void })
           </button>
         ))}
       </nav>
-      {current.id === "official" ? <Official /> : <Development />}
+      {current.id === "official" ? <Official key={game.id} game={game.id} /> : <Development key={game.id} game={game.id} />}
     </div>
   );
 }
@@ -56,40 +74,41 @@ function ActiveBadge() {
 
 // ---------------------------------------------------------------------------------------------
 
-function Official() {
+function Official({ game }: { game: string }) {
   const { backend, snapshot, setSnapshot, run, toast, bumpStatus } = useLauncher();
   const [busy, setBusy] = useState<string | null>(null);
-  const cfg = snapshot?.settings.official;
+  const cfg = snapshot?.feeds[game] ?? null;
   const [rows, setRows] = useState<OfficialRelease[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [owner, setOwner] = useState(cfg?.owner ?? "");
   const [repo, setRepo] = useState(cfg?.repo ?? "");
+  const [confirmDelete, setConfirmDelete] = useState<OfficialRelease | null>(null);
   const enabled = !!cfg?.enabled;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setRows(await backend.officialReleases());
+      setRows(await backend.officialReleases(game));
     } catch (e) {
       setError(errorText(e));
     }
     setLoading(false);
-  }, [backend]);
+  }, [backend, game]);
 
   useEffect(() => {
     if (enabled) void load();
   }, [enabled, load]);
 
   async function save(nextEnabled: boolean) {
-    const s = await run(() => backend.setOfficialConfig(nextEnabled, owner.trim(), repo.trim()));
+    const s = await run(() => backend.setOfficialConfig(game, nextEnabled, owner.trim(), repo.trim()));
     if (s) setSnapshot(s);
   }
 
   async function download(version: string) {
     setBusy(version);
-    const info = await run(() => backend.downloadOfficial(version));
+    const info = await run(() => backend.downloadOfficial(game, version));
     setBusy(null);
     if (info) {
       toast(`Installed ReRAC ${info.manifest?.version ?? version}.`, "ok");
@@ -97,19 +116,49 @@ function Official() {
     }
   }
 
-  async function activate(version: string) {
-    setBusy(version);
-    const s = await run(() => backend.setActiveVersion({ source: "official", id: version }));
+  // Rows act on the installed folder's id (`r.id`: `<game>-<tag>`, or a plain tag from before
+  // per-game versions); the tag is what the player sees.
+  async function activate(r: OfficialRelease) {
+    if (!r.id) return;
+    setBusy(r.version);
+    const s = await run(() => backend.setActiveVersion({ source: "official", id: r.id! }));
     setBusy(null);
     if (s) {
       setSnapshot(s);
       bumpStatus();
       toast("Active version changed.", "ok");
-      await warnIfDataMismatch(backend, toast);
+      await warnIfDataMismatch(backend, game, toast);
     }
   }
 
-  const activeOfficial = snapshot?.settings.active_version?.source === "official" ? snapshot.settings.active_version.id : null;
+  async function remove(r: OfficialRelease) {
+    setConfirmDelete(null);
+    if (!r.id) return;
+    setBusy(r.version);
+    const s = await run(() => backend.uninstallVersion({ source: "official", id: r.id! }));
+    setBusy(null);
+    if (s) {
+      setSnapshot(s);
+      bumpStatus();
+      toast(`Deleted ReRAC ${r.version}.`, "info");
+      await load();
+    }
+  }
+
+  const chosen = snapshot?.settings.active_versions[game];
+  const activeOfficial = chosen?.source === "official" ? chosen.id : null;
+
+  if (!cfg) {
+    return (
+      <div className="notice plate">
+        <IconInfo size={22} />
+        <div>
+          <strong>No releases for this game yet.</strong>
+          <p className="muted">Builds from the Development tab can still be installed and played.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -188,13 +237,18 @@ function Official() {
                   <td>{r.changes}</td>
                   <td className="vt-actions">
                     {r.installed ? (
-                      activeOfficial === r.version ? (
-                        <ActiveBadge />
-                      ) : (
-                        <button className="btn btn-ghost btn-sm" disabled={busy !== null} onClick={() => void activate(r.version)}>
-                          {busy === r.version ? "Checking…" : "Set active"}
+                      <div className="row">
+                        {activeOfficial === r.id ? (
+                          <ActiveBadge />
+                        ) : (
+                          <button className="btn btn-ghost btn-sm" disabled={busy !== null} onClick={() => void activate(r)}>
+                            {busy === r.version ? "Working…" : "Set active"}
+                          </button>
+                        )}
+                        <button className="btn btn-ghost btn-sm btn-icon is-danger" title="Delete this installed build" disabled={busy !== null} onClick={() => setConfirmDelete(r)}>
+                          <IconTrash size={16} />
                         </button>
-                      )
+                      </div>
                     ) : (
                       <button className="btn btn-primary btn-sm btn-icon" disabled={!r.asset || busy !== null} title={r.asset ? `Download and install ${r.asset.name}` : "No download for this system"} onClick={() => void download(r.version)}>
                         {busy === r.version ? <IconRefresh size={16} /> : <IconDownload size={16} />}
@@ -208,7 +262,7 @@ function Official() {
       </div>
       <details className="card plate advanced">
         <summary>Release feed</summary>
-        <p className="muted small">GitHub repository the Official list reads from.</p>
+        <p className="muted small">GitHub repository this game's Official list reads from.</p>
         <div className="form-row">
           <label>
             Owner
@@ -228,13 +282,28 @@ function Official() {
           </button>
         </div>
       </details>
+      {confirmDelete && (
+        <Modal
+          title={`Delete ReRAC ${confirmDelete.version}?`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => void remove(confirmDelete)}
+          onClose={() => setConfirmDelete(null)}
+        >
+          <p>
+            This deletes the downloaded build from the data folder.
+            {activeOfficial === confirmDelete.id && " It is the active version, so you will need to pick another one before playing."}{" "}
+            Your game data, saves and settings stay. You can download it again from this list.
+          </p>
+        </Modal>
+      )}
     </>
   );
 }
 
 // ---------------------------------------------------------------------------------------------
 
-function Development() {
+function Development({ game }: { game: string }) {
   const { backend, snapshot, setSnapshot, run, toast, bumpStatus } = useLauncher();
   const [list, setList] = useState<VersionInfo[]>([]);
   const [checked, setChecked] = useState<Record<string, VersionInfo>>({});
@@ -258,7 +327,8 @@ function Development() {
 
   const reload = useCallback(async () => {
     const all = await backend.listVersions();
-    const dev = all.filter((v) => v.ref.source === "development");
+    // This game's builds, plus folders whose manifest can't be read (they belong to no game yet).
+    const dev = all.filter((v) => v.ref.source === "development" && (!v.manifest || v.manifest.game === game));
     setList(dev);
     return dev;
   }, [backend]);
@@ -267,7 +337,7 @@ function Development() {
     void reload().then(async (dev) => {
       for (const v of dev) if (!v.problem) await validate(v.ref);
     });
-  }, [reload, validate, snapshot?.settings.active_version?.id]);
+  }, [reload, validate, snapshot?.settings.active_versions[game]?.id]);
 
   async function add() {
     const path = await run(() => backend.pickFolder("Choose a ReRAC build folder (with rerac-manifest.json)"));
@@ -302,7 +372,7 @@ function Development() {
       setSnapshot(s);
       bumpStatus();
       toast("Active version changed.", "ok");
-      await warnIfDataMismatch(backend, toast);
+      await warnIfDataMismatch(backend, game, toast);
     }
   }
 
@@ -317,7 +387,8 @@ function Development() {
     }
   }
 
-  const activeId = snapshot?.settings.active_version?.source === "development" ? snapshot.settings.active_version.id : null;
+  const chosen = snapshot?.settings.active_versions[game];
+  const activeId = chosen?.source === "development" ? chosen.id : null;
 
   return (
     <>

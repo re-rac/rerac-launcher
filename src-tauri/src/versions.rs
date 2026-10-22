@@ -3,10 +3,15 @@
 //! A version is a folder holding `rerac-manifest.json` (contract §Version). Versions come from
 //! *sources*:
 //!
-//! - `official`: GitHub releases, downloaded and unpacked into `<root>/versions/official/<tag>/`.
+//! - `official`: GitHub releases of each game's feed, downloaded and unpacked into
+//!   `<root>/versions/official/<game>-<tag>/`.
 //! - `development`: local build folders the user adds (they stay where they are, the id is the
 //!   absolute path) and build zips installed with "Install from zip…" (unpacked into
-//!   `<root>/versions/development/<version>/`, the id is the folder name).
+//!   `<root>/versions/development/<game>-<version>/`, the id is the folder name).
+//!
+//! Every version's manifest names its game; each game runs its own chosen version
+//! (`Settings::active_versions`). Folders from before per-game versions are named `<tag>` /
+//! `<version>` and hold R&C1 builds ([`managed_id`]).
 //!
 //! Mods will be one more source (`versions/mods/<name>/`, installed like official builds from
 //! another feed). Adding it means a new `SourceId` variant and its arm in `SourceId::location`;
@@ -139,12 +144,35 @@ pub fn resolve(layout: &Layout, settings: &Settings, r: &VersionRef) -> Result<R
     resolve_dir(r.clone(), dir)
 }
 
-pub fn resolve_active(layout: &Layout, settings: &Settings) -> Result<ResolvedVersion, String> {
+/// The version `game` runs; its manifest must be for that game.
+pub fn resolve_active(layout: &Layout, settings: &Settings, game: &str) -> Result<ResolvedVersion, String> {
     let r = settings
-        .active_version
-        .as_ref()
-        .ok_or("No game version is active. Pick one in Settings → Version Management.")?;
-    resolve(layout, settings, r)
+        .active(game)
+        .ok_or("No version is chosen for this game. Pick one above the Play button.")?;
+    let v = resolve(layout, settings, r)?;
+    if v.manifest.game != game {
+        return Err(format!("The chosen version is for {}, not {game}.", v.manifest.game));
+    }
+    Ok(v)
+}
+
+/// Folder name of a launcher-installed version: `<game>-<version>` (an Official release tag or a
+/// build zip's manifest version), so two games' builds of the same version never share a folder.
+/// Installs from before per-game versions are plain `<version>` folders of R&C1 builds; they
+/// stay valid (the manifest says which game a folder holds).
+pub fn managed_id(game: &str, version: &str) -> String {
+    format!("{game}-{version}")
+}
+
+/// The installed folder of release `tag` of `game` under `source_dir`, if any: `<game>-<tag>`,
+/// or a plain `<tag>` folder from before per-game versions whose manifest is for `game`.
+pub fn installed_id(source_dir: &Path, game: &str, tag: &str) -> Option<String> {
+    let id = managed_id(game, tag);
+    if source_dir.join(&id).join(MANIFEST_FILE).is_file() {
+        return Some(id);
+    }
+    let legacy = source_dir.join(tag);
+    (valid_managed_id(tag) && read_manifest(&legacy).is_ok_and(|m| m.game == game)).then(|| tag.to_string())
 }
 
 /// Runs `<runtime> --version-json` (10 s timeout) and checks it agrees with the manifest.
@@ -319,7 +347,7 @@ mod tests {
         let mut s = Settings::default();
         let dref = s.add_dev_version(dev.clone());
         s.add_dev_version(t.0.join("missing"));
-        s.active_version = Some(dref.clone());
+        s.active_versions.insert("rac1".into(), dref.clone());
 
         let all = list(&layout, &s);
         assert_eq!(all.len(), 4);
@@ -330,7 +358,24 @@ mod tests {
         assert!(all[1].managed && all[1].problem.is_none());
         assert!(all[2].active && all[2].vref == dref && all[2].problem.is_none() && !all[2].managed);
         assert!(all[3].problem.as_deref().unwrap().contains("No rerac-manifest.json"));
-        assert_eq!(resolve_active(&layout, &s).unwrap().runtime, dev.join("bin/rerac"));
+        assert_eq!(resolve_active(&layout, &s, "rac1").unwrap().runtime, dev.join("bin/rerac"));
+        assert!(resolve_active(&layout, &s, "rac2").is_err(), "no version chosen for rac2");
+        s.active_versions.insert("rac2".into(), dref);
+        assert!(resolve_active(&layout, &s, "rac2").unwrap_err().contains("is for rac1"));
+    }
+
+    #[test]
+    fn installed_ids_are_per_game_and_old_folders_still_count() {
+        let t = TempDir::new("installed-id");
+        let official = t.0.join("official");
+        assert_eq!(installed_id(&official, "rac1", "v0.3.7"), None);
+        write_version(&official.join("rac1-v0.3.7"), "");
+        assert_eq!(installed_id(&official, "rac1", "v0.3.7").as_deref(), Some("rac1-v0.3.7"));
+        assert_eq!(installed_id(&official, "rac2", "v0.3.7"), None);
+        // A schema-1 install: the plain tag, an R&C1 manifest.
+        write_version(&official.join("v0.3.6"), "");
+        assert_eq!(installed_id(&official, "rac1", "v0.3.6").as_deref(), Some("v0.3.6"));
+        assert_eq!(installed_id(&official, "rac2", "v0.3.6"), None);
     }
 
     #[cfg(unix)]

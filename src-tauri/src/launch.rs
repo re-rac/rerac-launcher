@@ -46,10 +46,7 @@ pub struct LaunchPlan {
 
 /// Resolves the active version and checks the installed data against it.
 pub fn plan(layout: &Layout, settings: &Settings, game: &str) -> Result<LaunchPlan, String> {
-    let v = versions::resolve_active(layout, settings)?;
-    if v.manifest.game != game {
-        return Err(format!("The active version is for {}, not {game}.", v.manifest.game));
-    }
+    let v = versions::resolve_active(layout, settings, game)?;
     let data_dir = layout.game_data_dir(game);
     let info = extractor::read_install(&data_dir).ok_or("The game data is not installed.")?;
     if info.data_format != v.manifest.data_format {
@@ -248,14 +245,17 @@ mod tests {
         let t = crate::paths::tests::TempDir::new("plan");
         let layout = Layout::new(t.0.join("root"));
         let mut s = Settings::default();
-        assert!(plan(&layout, &s, "rac1").unwrap_err().contains("No game version is active"));
+        assert!(plan(&layout, &s, "rac1").unwrap_err().contains("No version is chosen"));
 
         let v = layout.source_dir("development").join("0.1.0");
         fs::create_dir_all(&v).unwrap();
         fs::write(v.join(crate::contract::MANIFEST_FILE), crate::install::tests::MANIFEST).unwrap();
         fs::write(v.join("rerac"), "").unwrap();
         fs::write(v.join("rerac-extract"), "").unwrap();
-        s.active_version = Some(versions::VersionRef { source: versions::SourceId::Development, id: "0.1.0".into() });
+        let r = versions::VersionRef { source: versions::SourceId::Development, id: "0.1.0".into() };
+        s.active_versions.insert("rac2".into(), r.clone());
+        assert!(plan(&layout, &s, "rac1").unwrap_err().contains("No version is chosen"), "rac2's choice is not rac1's");
+        s.active_versions.insert("rac1".into(), r);
         assert!(plan(&layout, &s, "rac1").unwrap_err().contains("not installed"));
 
         let data = layout.game_data_dir("rac1");

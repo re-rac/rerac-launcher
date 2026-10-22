@@ -9,6 +9,7 @@ import type {
   ExitedPayload,
   FinishedPayload,
   GameStatus,
+  LauncherUpdate,
   OfficialRelease,
   VersionInfo,
   VersionRef,
@@ -19,6 +20,7 @@ const EV_EXTRACTOR = "extractor://event";
 const EV_FINISHED = "extractor://finished";
 const EV_EXITED = "game://exited";
 const EV_DOWNLOAD = "download://progress";
+const EV_UPDATE = "launcher://update-ready";
 
 export function createTauriBackend(): Backend {
   const win = getCurrentWindow();
@@ -49,13 +51,15 @@ export function createTauriBackend(): Backend {
     validateVersion: (vref: VersionRef) => invoke<VersionInfo>("validate_version", { vref }),
     removeDevVersion: (path) => invoke<AppSnapshot>("remove_dev_version", { path }),
     setActiveVersion: (vref: VersionRef) => invoke<AppSnapshot>("set_active_version", { vref }),
-    officialReleases: () => invoke<OfficialRelease[]>("official_releases"),
-    setOfficialConfig: (enabled, owner, repo) => invoke<AppSnapshot>("set_official_config", { enabled, owner, repo }),
-    downloadOfficial: (version) => invoke<VersionInfo>("download_official", { version }),
+    officialReleases: (game) => invoke<OfficialRelease[]>("official_releases", { game }),
+    setOfficialConfig: (game, enabled, owner, repo) => invoke<AppSnapshot>("set_official_config", { game, enabled, owner, repo }),
+    downloadOfficial: (game, version) => invoke<VersionInfo>("download_official", { game, version }),
     onExtractorEvent: (cb) => listen<EventPayload>(EV_EXTRACTOR, (e) => cb(e.payload)),
     onExtractorFinished: (cb) => listen<FinishedPayload>(EV_FINISHED, (e) => cb(e.payload)),
     onGameExited: (cb) => listen<ExitedPayload>(EV_EXITED, (e) => cb(e.payload)),
     onDownloadProgress: (cb) => listen<DownloadProgress>(EV_DOWNLOAD, (e) => cb(e.payload)),
+    installLauncherUpdate: () => invoke<void>("install_launcher_update"),
+    onLauncherUpdate: (cb) => listen<LauncherUpdate>(EV_UPDATE, (e) => cb(e.payload)),
     window: {
       minimize: () => win.minimize(),
       toggleMaximize: () => win.toggleMaximize(),

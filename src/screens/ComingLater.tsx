@@ -1,4 +1,5 @@
 import { Backdrop } from "../components/Backdrop";
+import { GameLogo } from "../components/GameLogo";
 import { Rivet } from "../components/Icons";
 import type { GameDef } from "../lib/games";
 
@@ -7,7 +8,7 @@ export function ComingLater({ game }: { game: GameDef }) {
     <section className="coming">
       <Backdrop game={game} mode="blur" />
       <div className="coming-inner">
-        <img className="coming-logo" src={game.logo} alt={game.title} draggable={false} />
+        <GameLogo game={game} className="coming-logo" />
         <div className="coming-plate plate">
           <Rivet className="rivet tl" />
           <Rivet className="rivet tr" />

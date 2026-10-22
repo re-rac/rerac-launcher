@@ -1,7 +1,8 @@
 //! Official releases from the GitHub releases API.
 //!
-//! On by default (`settings.official.enabled`), reading the game's releases on re-rac/rerac. The
-//! owner and repo are configurable. A mod feed can reuse `fetch_releases` with another repo.
+//! Each game reads its own feed (`Settings::feed`: R&C1 on re-rac/rerac, Going Commando on
+//! re-rac/rerac2); owner and repo are configurable per game. A mod feed can reuse
+//! `fetch_releases` with another repo.
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -45,6 +46,8 @@ pub struct OfficialRelease {
     pub prerelease: bool,
     pub asset: Option<GhAsset>,
     pub installed: bool,
+    /// The version id of the installed folder (`versions::installed_id`), when installed.
+    pub id: Option<String>,
 }
 
 pub fn releases_url(owner: &str, repo: &str) -> Result<String, String> {
@@ -111,14 +114,17 @@ pub fn pick_asset<'a>(assets: &'a [GhAsset], os: &str, arch: &str) -> Option<&'a
         .copied()
 }
 
-pub fn to_rows(releases: Vec<GhRelease>, installed_dir: &Path) -> Vec<OfficialRelease> {
+/// The rows of `game`'s feed; `installed_dir` is `versions/official/`.
+pub fn to_rows(releases: Vec<GhRelease>, installed_dir: &Path, game: &str) -> Vec<OfficialRelease> {
     releases
         .into_iter()
         .filter(|r| !r.draft)
         .map(|r| {
             let asset = pick_asset(&r.assets, std::env::consts::OS, std::env::consts::ARCH).cloned();
+            let id = crate::versions::installed_id(installed_dir, game, &r.tag_name);
             OfficialRelease {
-                installed: installed_dir.join(&r.tag_name).join(crate::contract::MANIFEST_FILE).is_file(),
+                installed: id.is_some(),
+                id,
                 date: r.published_at.as_deref().unwrap_or("").chars().take(10).collect(),
                 changes: summarize(r.body.as_deref().unwrap_or("")),
                 url: r.html_url,
@@ -142,7 +148,8 @@ pub async fn fetch_releases(owner: &str, repo: &str) -> Result<Vec<GhRelease>, S
     let status = resp.status();
     let text = resp.text().await.map_err(|e| e.to_string())?;
     if status.as_u16() == 404 {
-        return Err(format!("{owner}/{repo} was not found (it may still be private)"));
+        // GitHub answers 404 for a private repository too.
+        return Err(format!("No public releases yet (github.com/{owner}/{repo} is not public)."));
     }
     if !status.is_success() {
         return Err(format!("GitHub answered {status}"));
@@ -210,12 +217,12 @@ mod tests {
             {"tag_name":"v0.3.0-draft","draft":true,"assets":[]}]"###;
         let rel = parse_releases(json).unwrap();
         assert_eq!(rel.len(), 2);
-        let rows = to_rows(rel, Path::new("/nonexistent"));
+        let rows = to_rows(rel, Path::new("/nonexistent"), "rac1");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].version, "v0.2.0");
         assert_eq!(rows[0].date, "2026-10-01");
         assert_eq!(rows[0].changes, "Changes · Faster loading · Fix Novalis");
-        assert!(!rows[0].installed);
+        assert!(!rows[0].installed && rows[0].id.is_none());
     }
 
     #[test]

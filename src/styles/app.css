@@ -44,22 +44,8 @@
   position: relative;
   z-index: 5;
 }
-.titlebar::after {
-  /* thin orange accent line under the brand */
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -1px;
-  width: 360px;
-  height: 2px;
-  background: linear-gradient(90deg, var(--orange), transparent);
-  pointer-events: none;
-}
 .titlebar.is-mac {
   padding-left: 86px;
-}
-.titlebar.is-mac::after {
-  left: 70px;
 }
 .tb-fake-lights {
   position: absolute;
@@ -219,6 +205,26 @@
   transition:
     filter 0.25s var(--ease),
     transform 0.25s var(--ease);
+}
+.game-wordmark {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 2px 3px #000a;
+}
+.sb-game .game-wordmark {
+  font-size: 17px;
+  filter: grayscale(0.65) brightness(0.72);
+  transition: filter 0.25s var(--ease);
+}
+.sb-game:hover .game-wordmark,
+.sb-game.is-active .game-wordmark {
+  filter: none;
+}
+.coming-logo.game-wordmark {
+  font-size: clamp(40px, 7vw, 72px);
 }
 .sb-game:hover img {
   filter: grayscale(0.15) brightness(0.95) drop-shadow(0 2px 3px #000a);
@@ -1111,6 +1117,11 @@
   text-align: right;
   white-space: nowrap;
 }
+.vt-actions .row {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
 .vtable .badge {
   margin-left: 8px;
 }
@@ -1397,4 +1408,125 @@
   .sb-game {
     height: 68px;
   }
+}
+
+/* Version picker above Play (components/VersionPicker.tsx) */
+.gs-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+.vpick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.vpick-label {
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  text-shadow: 0 1px 3px #000;
+}
+.vpick-btn {
+  --c: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 230px;
+  padding: 9px 14px;
+  border: 0;
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--text);
+  background: linear-gradient(180deg, #25314acc, #1a2438cc);
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+  box-shadow:
+    inset 0 1px 0 #ffffff1f,
+    inset 0 -2px 0 #0005;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.vpick-btn:hover:not(:disabled),
+.vpick-btn.is-open {
+  background: linear-gradient(180deg, #2f3d5a, #212c44);
+}
+.vpick-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.vpick-btn.is-empty .vpick-current {
+  color: var(--orange-hi);
+}
+.vpick-current {
+  flex: 1;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.vpick-caret {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--text-2);
+  transition: transform 0.15s var(--ease);
+}
+.vpick-btn.is-open .vpick-caret {
+  transform: rotate(180deg);
+}
+.vpick-pop {
+  bottom: calc(100% + 8px);
+  min-width: 100%;
+}
+.vpick-pop button.is-selected {
+  color: var(--text);
+}
+.vpick-item {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.vpick-sub {
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.vpick-gap {
+  width: 18px;
+  flex: none;
+}
+.vpick-none {
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  color: var(--text-3);
+}
+.game-tabs .subtab {
+  text-transform: none;
+}
+
+/* Launcher update ready (components/UpdateBanner.tsx) */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 16px;
+  font-size: 0.86rem;
+  color: var(--text-2);
+  background: linear-gradient(90deg, #f28c2824, #f28c280a 60%, transparent);
+  border-bottom: 1px solid #f28c2840;
+}
+.update-banner > svg {
+  color: var(--orange-hi);
+  flex: none;
+}
+.update-banner > span {
+  flex: 1;
+}
+.update-banner strong {
+  color: var(--text);
 }

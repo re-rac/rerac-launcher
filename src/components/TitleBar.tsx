@@ -5,8 +5,6 @@ import { IconClose, IconMinus, IconSquare } from "./Icons";
 export function TitleBar() {
   const { snapshot, backend } = useLauncher();
   const mac = snapshot?.platform === "macos";
-  const runtime = snapshot?.active?.version ?? null;
-  const runtimeProblem = snapshot?.active?.problem ?? null;
   return (
     <header className={`titlebar ${mac ? "is-mac" : ""}`} data-tauri-drag-region>
       {mac && backend.mode === "mock" && (
@@ -26,13 +24,6 @@ export function TitleBar() {
       <div className="tb-chips" data-tauri-drag-region>
         <span className="tb-chip" data-tauri-drag-region>
           <em>Launcher</em> v{snapshot?.launcher_version ?? "…"}
-        </span>
-        <span
-          className={`tb-chip ${runtime ? "" : "is-warn"}`}
-          title={runtimeProblem ?? (runtime ? "Active game version" : "No game version is active")}
-          data-tauri-drag-region
-        >
-          <em>Runtime</em> {runtime ? `v${runtime}` : "not set!"}
         </span>
       </div>
       {!mac && (

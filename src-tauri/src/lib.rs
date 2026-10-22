@@ -9,6 +9,7 @@ pub mod install;
 pub mod launch;
 pub mod paths;
 pub mod settings;
+pub mod updates;
 pub mod versions;
 
 use tauri::Manager;
@@ -18,6 +19,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::LauncherUpdate::default())
         .setup(|app| {
             let default_root = commands::default_root_or_fallback(app.handle());
             let env_root: Option<std::path::PathBuf> = std::env::var_os(paths::ROOT_ENV).map(Into::into);
@@ -27,6 +30,7 @@ pub fn run() {
                 launcher.log_note(&note);
             }
             app.manage(launcher);
+            updates::start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -58,6 +62,7 @@ pub fn run() {
             commands::official_releases,
             commands::set_official_config,
             commands::download_official,
+            commands::install_launcher_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the ReRAC launcher");

@@ -26,7 +26,7 @@ export function Settings({ route, go }: { route: string[]; go: (p: string) => vo
           ))}
         </nav>
       </header>
-      <div className="page-body">{tab === "folders" ? <Folders /> : <Versions sub={route[2]} go={go} />}</div>
+      <div className="page-body">{tab === "folders" ? <Folders /> : <Versions sub={route[2]} game={route[3]} go={go} />}</div>
     </section>
   );
 }

@@ -9,7 +9,8 @@
 //!    wrap everything in `rerac-<version>-<os>-<arch>/`);
 //! 3. validate the manifest and both binaries, clear the macOS quarantine flag
 //!    ([`clear_quarantine`]), and ask the runtime for `--version-json`;
-//! 4. rename the folder to `versions/<source>/<id>/`, replacing an older install of the same id.
+//! 4. rename the folder to `versions/<source>/<game>-<version>/` (`versions::managed_id`),
+//!    replacing an older install of the same id.
 //!
 //! Nothing lands under `<id>` unless every step passed; staging is removed on any failure.
 
@@ -188,13 +189,16 @@ fn staging_dir(source_dir: &Path) -> PathBuf {
 }
 
 /// Installs a build archive as a version of `source` under `source_dir`
-/// (`<root>/versions/<source>/`). `id` names the folder (an Official release tag); `None` uses
-/// the manifest's `version`. `game` limits what is accepted (the games the launcher knows).
+/// (`<root>/versions/<source>/`), in the folder `<game>-<version>`: `tag` is the version (an
+/// Official release tag); `None` uses the manifest's `version`. `known_games` limits what is
+/// accepted (the games the launcher knows); `expect_game`, when given, is the only game accepted
+/// (a game's release feed must hold that game's builds).
 pub fn install_archive(
     archive: &Path,
     source: SourceId,
     source_dir: &Path,
-    id: Option<&str>,
+    tag: Option<&str>,
+    expect_game: Option<&str>,
     known_games: &[&str],
 ) -> Result<Installed, String> {
     let name = archive.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
@@ -205,7 +209,7 @@ pub fn install_archive(
     let staging = staging_dir(source_dir);
     remove_dir_if_exists(&staging).map_err(|e| e.to_string())?;
     fs::create_dir_all(&staging).map_err(|e| format!("Could not create {}: {e}", staging.display()))?;
-    let result = install_into(archive, source, source_dir, &staging, id, known_games);
+    let result = install_into(archive, source, source_dir, &staging, tag, expect_game, known_games);
     let _ = remove_dir_if_exists(&staging);
     result
 }
@@ -215,7 +219,8 @@ fn install_into(
     source: SourceId,
     source_dir: &Path,
     staging: &Path,
-    id: Option<&str>,
+    tag: Option<&str>,
+    expect_game: Option<&str>,
     known_games: &[&str],
 ) -> Result<Installed, String> {
     unpack_zip(archive, staging)?;
@@ -224,7 +229,10 @@ fn install_into(
     if !known_games.contains(&manifest.game.as_str()) {
         return Err(format!("This build is for \"{}\", a game this launcher does not know.", manifest.game));
     }
-    let id = id.map(str::to_string).unwrap_or_else(|| manifest.version.clone());
+    if let Some(game) = expect_game.filter(|g| *g != manifest.game) {
+        return Err(format!("This release is a build of {}, not {game}.", manifest.game));
+    }
+    let id = versions::managed_id(&manifest.game, tag.unwrap_or(&manifest.version));
     if !valid_managed_id(&id) {
         return Err(format!("\"{id}\" can't be used as a version folder name."));
     }
@@ -245,10 +253,10 @@ pub fn downloads_dir(official_dir: &Path) -> PathBuf {
     official_dir.join(".downloads")
 }
 
-/// Installs a downloaded Official release asset as `versions/official/<tag>/` and deletes the
-/// download. The same path as a local zip; only the folder name comes from the release tag.
-pub fn install_download(file: &Path, official_dir: &Path, tag: &str, known_games: &[&str]) -> Result<Installed, String> {
-    let result = install_archive(file, SourceId::Official, official_dir, Some(tag), known_games);
+/// Installs a downloaded Official release asset of `game` as `versions/official/<game>-<tag>/` and
+/// deletes the download. The same path as a local zip; the version comes from the release tag.
+pub fn install_download(file: &Path, official_dir: &Path, game: &str, tag: &str, known_games: &[&str]) -> Result<Installed, String> {
+    let result = install_archive(file, SourceId::Official, official_dir, Some(tag), Some(game), known_games);
     let _ = fs::remove_file(file);
     if let Some(dir) = file.parent() {
         let _ = fs::remove_dir(dir); // only if empty
@@ -305,9 +313,9 @@ pub(crate) mod tests {
         let zip_path = t.0.join("rerac-0.1.0-macos-arm64.zip");
         release_zip(&zip_path, Some("rerac-0.1.0-macos-arm64"), 0o755);
         let src = t.0.join("root/versions/development");
-        let got = install_archive(&zip_path, SourceId::Development, &src, None, &["rac1"]).unwrap();
-        assert_eq!(got.vref, VersionRef { source: SourceId::Development, id: "0.1.0".into() });
-        assert_eq!(got.dir, src.join("0.1.0"));
+        let got = install_archive(&zip_path, SourceId::Development, &src, None, None, &["rac1"]).unwrap();
+        assert_eq!(got.vref, VersionRef { source: SourceId::Development, id: "rac1-0.1.0".into() });
+        assert_eq!(got.dir, src.join("rac1-0.1.0"));
         assert_eq!(got.runtime.version, "0.1.0");
         assert!(!got.replaced);
         assert_eq!(mode(&got.dir.join("rerac")), 0o755);
@@ -316,10 +324,10 @@ pub(crate) mod tests {
         assert!(!got.dir.join("._rerac").exists());
         // Only the version folder is left: no staging, no __MACOSX.
         let names: Vec<_> = fs::read_dir(&src).unwrap().flatten().map(|e| e.file_name()).collect();
-        assert_eq!(names, ["0.1.0"]);
+        assert_eq!(names, ["rac1-0.1.0"]);
 
         // Reinstalling replaces it.
-        let again = install_archive(&zip_path, SourceId::Development, &src, None, &["rac1"]).unwrap();
+        let again = install_archive(&zip_path, SourceId::Development, &src, None, None, &["rac1"]).unwrap();
         assert!(again.replaced);
     }
 
@@ -330,8 +338,8 @@ pub(crate) mod tests {
         let zip_path = t.0.join("build.zip");
         release_zip(&zip_path, None, 0o644);
         let src = t.0.join("versions/official");
-        let got = install_archive(&zip_path, SourceId::Official, &src, Some("v0.1.0"), &["rac1"]).unwrap();
-        assert_eq!(got.dir, src.join("v0.1.0"));
+        let got = install_archive(&zip_path, SourceId::Official, &src, Some("v0.1.0"), None, &["rac1"]).unwrap();
+        assert_eq!(got.dir, src.join("rac1-v0.1.0"));
         assert_eq!(mode(&got.dir.join("rerac")) & 0o111, 0o111);
     }
 
@@ -346,8 +354,8 @@ pub(crate) mod tests {
         fs::create_dir_all(&dl).unwrap();
         let file = dl.join("rerac-0.1.0-macos-arm64.zip");
         release_zip(&file, Some("rerac-0.1.0-macos-arm64"), 0o755);
-        let got = install_download(&file, &official, "v0.1.0", &["rac1"]).unwrap();
-        assert_eq!(got.vref, VersionRef { source: SourceId::Official, id: "v0.1.0".into() });
+        let got = install_download(&file, &official, "rac1", "v0.1.0", &["rac1"]).unwrap();
+        assert_eq!(got.vref, VersionRef { source: SourceId::Official, id: "rac1-v0.1.0".into() });
         assert!(got.dir.join("rerac").is_file());
         assert!(!file.exists() && !dl.exists());
         // It shows up in the listing like any installed version, and github::to_rows sees it.
@@ -358,7 +366,12 @@ pub(crate) mod tests {
         // A bad tag is refused and nothing is installed.
         fs::create_dir_all(&dl).unwrap();
         release_zip(&file, None, 0o755);
-        assert!(install_download(&file, &official, "../x", &["rac1"]).is_err());
+        assert!(install_download(&file, &official, "rac1", "../x", &["rac1"]).is_err());
+        assert_eq!(versions::list_managed(&layout, SourceId::Official).len(), 1);
+        // Another game's feed may not install an R&C1 build.
+        fs::create_dir_all(&dl).unwrap();
+        release_zip(&file, None, 0o755);
+        assert!(install_download(&file, &official, "rac2", "v0.1.0", &["rac1", "rac2"]).unwrap_err().contains("not rac2"));
         assert_eq!(versions::list_managed(&layout, SourceId::Official).len(), 1);
     }
 
@@ -369,7 +382,7 @@ pub(crate) mod tests {
         // Not a zip at all.
         let bogus = t.0.join("bogus.zip");
         fs::write(&bogus, "nope").unwrap();
-        assert!(install_archive(&bogus, SourceId::Development, &src, None, &["rac1"]).unwrap_err().contains("not a readable zip"));
+        assert!(install_archive(&bogus, SourceId::Development, &src, None, None, &["rac1"]).unwrap_err().contains("not a readable zip"));
         // A zip with no manifest.
         let empty = t.0.join("empty.zip");
         {
@@ -378,13 +391,13 @@ pub(crate) mod tests {
             w.write_all(b"hi").unwrap();
             w.finish().unwrap();
         }
-        assert!(install_archive(&empty, SourceId::Development, &src, None, &["rac1"]).unwrap_err().contains("not a ReRAC build"));
+        assert!(install_archive(&empty, SourceId::Development, &src, None, None, &["rac1"]).unwrap_err().contains("not a ReRAC build"));
         // Wrong extension.
-        assert!(install_archive(&t.0.join("x.tar.gz"), SourceId::Development, &src, None, &["rac1"]).is_err());
+        assert!(install_archive(&t.0.join("x.tar.gz"), SourceId::Development, &src, None, None, &["rac1"]).is_err());
         // Unknown game.
         let zip_path = t.0.join("b.zip");
         release_zip(&zip_path, Some("top"), 0o755);
-        assert!(install_archive(&zip_path, SourceId::Development, &src, None, &["rac2"]).unwrap_err().contains("does not know"));
+        assert!(install_archive(&zip_path, SourceId::Development, &src, None, None, &["rac2"]).unwrap_err().contains("does not know"));
         let left: Vec<_> = fs::read_dir(&src).unwrap().flatten().collect();
         assert!(left.is_empty(), "staging left behind: {left:?}");
     }

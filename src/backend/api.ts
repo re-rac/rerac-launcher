@@ -9,6 +9,7 @@ import type {
   ExitedPayload,
   ExportKind,
   FinishedPayload,
+  LauncherUpdate,
   GameStatus,
   OfficialRelease,
   VersionInfo,
@@ -50,23 +51,30 @@ export interface Backend {
   listVersions(): Promise<VersionInfo[]>;
   addDevVersion(path: string): Promise<VersionInfo>;
   pickZip(): Promise<string | null>;
-  /** Unpacks a build zip into versions/development/<version>/ and validates it. */
+  /** Unpacks a build zip into versions/development/<game>-<version>/ and validates it. */
   installVersionZip(path: string): Promise<VersionInfo>;
   /** Deletes a launcher-installed version (managed: true). */
   uninstallVersion(vref: VersionRef): Promise<AppSnapshot>;
   validateVersion(vref: VersionRef): Promise<VersionInfo>;
   removeDevVersion(path: string): Promise<AppSnapshot>;
+  /** Makes the version the chosen one of the game its manifest names. */
   setActiveVersion(vref: VersionRef): Promise<AppSnapshot>;
 
-  officialReleases(): Promise<OfficialRelease[]>;
-  setOfficialConfig(enabled: boolean, owner: string, repo: string): Promise<AppSnapshot>;
-  /** Downloads and installs a release into versions/official/<tag>/. */
-  downloadOfficial(version: string): Promise<VersionInfo>;
+  /** The releases of the game's feed. */
+  officialReleases(game: string): Promise<OfficialRelease[]>;
+  setOfficialConfig(game: string, enabled: boolean, owner: string, repo: string): Promise<AppSnapshot>;
+  /** Downloads and installs a release of the game into versions/official/<game>-<tag>/. */
+  downloadOfficial(game: string, version: string): Promise<VersionInfo>;
 
   onExtractorEvent(cb: (p: EventPayload) => void): Promise<Unlisten>;
   onExtractorFinished(cb: (p: FinishedPayload) => void): Promise<Unlisten>;
   onGameExited(cb: (p: ExitedPayload) => void): Promise<Unlisten>;
   onDownloadProgress(cb: (p: DownloadProgress) => void): Promise<Unlisten>;
+
+  /** Installs the downloaded launcher update and restarts into it (refused while a game or job runs). */
+  installLauncherUpdate(): Promise<void>;
+  /** A launcher update finished downloading. */
+  onLauncherUpdate(cb: (u: LauncherUpdate) => void): Promise<Unlisten>;
 
   window: {
     minimize(): Promise<void>;

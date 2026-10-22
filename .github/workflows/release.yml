@@ -159,17 +159,19 @@ jobs:
           # APPLE_ID: ${{ secrets.APPLE_ID }}
           # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}                         # app-specific password
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Tauri updater signing (also needs tauri-plugin-updater and its public key in tauri.conf.json;
-          # then set includeUpdaterJson to true):
-          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Launcher self-update (src-tauri/src/updates.rs): the updater bundles are signed with this key;
+          # its public key is plugins.updater.pubkey in tauri.conf.json.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "ReRAC Launcher ${{ github.ref_name }}"
           releaseId: ${{ needs.create-release.outputs.release_id }}
           releaseDraft: true
           prerelease: ${{ needs.create-release.outputs.prerelease == 'true' }}
-          includeUpdaterJson: false
+          # latest.json (each platform's update bundle and signature), merged across the build jobs;
+          # the publish job copies it to the update feed.
+          includeUpdaterJson: true
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
       # The website links to /releases/latest/download/<asset>, so each installer is also uploaded
@@ -253,6 +255,24 @@ jobs:
           jq -n --rawfile body notes.md --argjson pre "$PRERELEASE" \
             '{draft: false, prerelease: $pre, name: ("ReRAC Launcher " + env.TAG), body: $body}' |
             gh api -X PATCH "repos/$GH_REPO/releases/$RELEASE_ID" --input - --jq .html_url
+
+      # The launcher's update feed (plugins.updater.endpoints in tauri.conf.json) is latest.json on
+      # the `updater` branch: launcher releases are prereleases, which releases/latest/... skips, and
+      # a branch keeps the feed out of the release list the website shows.
+      - name: Point the launcher's update feed at this release
+        run: |
+          gh release download "$TAG" --repo "$GH_REPO" --pattern latest.json --dir feed
+          missing=$(jq -r '["darwin-aarch64","darwin-x86_64"] - (.platforms | keys) | join(", ")' feed/latest.json)
+          if [ -n "$missing" ]; then
+            echo "::error::latest.json has no update for $missing; the update feed still points at the previous release."
+            exit 1
+          fi
+          cd feed
+          git init -q -b updater
+          git add latest.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Launcher update feed: $TAG"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" updater
 
       # Optional: tells the website repository to rebuild. Needs a SITE_DISPATCH_TOKEN secret (a
       # token that can write to re-rac/re-rac.github.io); skipped when it is not set.

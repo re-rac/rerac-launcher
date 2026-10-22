@@ -45,6 +45,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2OEQyRDNBNzgxNkY1NjMKUldSajlSWjRPaTJOWnRQZlQ5cWZLVm1aa2c0QkxTZTlEeWNBaFVVQ090OC9JUmtDN0hHVncwS2kK",
+      "endpoints": [
+        "https://raw.githubusercontent.com/re-rac/rerac-launcher/updater/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

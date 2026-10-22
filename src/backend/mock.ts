@@ -8,6 +8,7 @@
 //   ?zip=<file name>   what the fake .zip dialog returns ("bad" in the name: not a build)
 //   ?autoplay=1        press Play on load (for screenshots of the launch path)
 //   ?export=fail31     the next export fails with that code
+//   ?update=1          a launcher update is downloaded and waiting for "Restart to update"
 
 import type { Backend, Unlisten } from "./api";
 import type {
@@ -17,6 +18,7 @@ import type {
   ExitedPayload,
   ExtractInfo,
   ExtractorEvent,
+  Feed,
   FinishedPayload,
   GameStatus,
   JobKind,
@@ -124,15 +126,28 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function createMockBackend(): Backend {
   const noVersion = scenario === "no-version";
   const settings: Settings = {
-    schema: 1,
-    active_version: noVersion ? null : { source: "development", id: DEV_BUILD },
-    official: { enabled: true, owner: "re-rac", repo: "rerac" },
+    schema: 2,
+    active_versions: noVersion ? {} : { rac1: { source: "development", id: DEV_BUILD } },
+    feeds: {},
     dev_versions: noVersion ? [] : [{ path: DEV_BUILD }, { path: `${HOME}/Downloads/rerac-old` }],
     ntsc_only: false,
     minimize_while_playing: false,
   };
   // Launcher-installed development versions (from "Install from zip…"), by folder name.
-  const installedZips = new Set<string>(noVersion ? [] : ["0.1.0"]);
+  const installedZips = new Set<string>(noVersion ? [] : ["rac1-0.1.0"]);
+  // Launcher-installed official releases, by folder name ("v0.1.0": from before per-game versions).
+  const installedOfficial = new Set<string>(["v0.1.0"]);
+  const DEFAULT_FEEDS: Record<string, Feed | null> = {
+    rac1: { enabled: true, owner: "re-rac", repo: "rerac" },
+    rac2: { enabled: true, owner: "re-rac", repo: "rerac2" },
+    rac3: null,
+    rac4: null,
+  };
+  const feedOf = (game: string): Feed | null => settings.feeds[game] ?? DEFAULT_FEEDS[game] ?? null;
+  const isActive = (id: string) => Object.values(settings.active_versions).some((v) => v?.id === id);
+  const clearActive = (id: string) => {
+    for (const [g, v] of Object.entries(settings.active_versions)) if (v?.id === id) delete settings.active_versions[g];
+  };
   let dataRoot = DEFAULT_ROOT;
   let installed: ExtractInfo | null = ["installed", "verifying", "exporting", "exported", "stale", "playing"].includes(scenario)
     ? { disc: "SCUS_971.99", data_format: 1, extractor_version: "0.1.0-dev", ntsc_only: false, files: FILES.length, bytes: TOTAL }
@@ -157,11 +172,17 @@ export function createMockBackend(): Backend {
     data_root: dataRoot,
     default_data_root: DEFAULT_ROOT,
     settings: structuredClone(settings),
-    active: settings.active_version
-      ? { ref: settings.active_version, version: devInfo(settings.active_version.id).manifest?.version ?? null, game: "rac1", data_format: devManifest().data_format, problem: null }
-      : null,
+    actives: Object.fromEntries(
+      Object.entries(settings.active_versions).map(([game, ref]) => [
+        game,
+        { ref: ref!, version: infoOf(ref!).manifest?.version ?? null, game, data_format: devManifest().data_format, problem: null },
+      ]),
+    ),
+    playable: ["rac1"],
+    feeds: Object.fromEntries(Object.keys(DEFAULT_FEEDS).map((g) => [g, feedOf(g)])),
     job: job ? { job: job.job, kind: job.kind, game: job.game } : null,
     game_running: running,
+    launcher_update: params.get("update") === "1" ? { version: "0.3.0", notes: "Pick each game's version above Play." } : null,
   });
 
   const emit = (kind: JobKind, id: number, event: ExtractorEvent) =>
@@ -266,17 +287,32 @@ export function createMockBackend(): Backend {
     const ref: VersionRef = { source: "development", id: path };
     const managed = !path.startsWith("/");
     const good = managed || path === DEV_BUILD || path.includes("/dist/");
-    const manifest = good ? { ...devManifest(), ...(managed ? { version: path } : {}) } : null;
+    const manifest = good ? { ...devManifest(), ...(managed ? { version: path.replace(/^rac\d-/, "") } : {}) } : null;
     return {
       ref,
       path: managed ? `${dataRoot}/versions/development/${path}` : path,
       manifest,
       runtime: manifest ? { name: "rerac", version: manifest.version, game: "rac1", data_format: manifest.data_format } : null,
       problem: good ? null : `No rerac-manifest.json in ${path}`,
-      active: settings.active_version?.id === path,
+      active: isActive(path),
       managed,
     };
   };
+
+  const officialInfo = (id: string): VersionInfo => {
+    const version = id.replace(/^rac\d-/, "").replace(/^v/, "");
+    const manifest = { ...devManifest(), version };
+    return {
+      ref: { source: "official", id },
+      path: `${dataRoot}/versions/official/${id}`,
+      manifest,
+      runtime: null,
+      problem: null,
+      active: isActive(id),
+      managed: true,
+    };
+  };
+  const infoOf = (ref: VersionRef): VersionInfo => (ref.source === "official" ? officialInfo(ref.id) : devInfo(ref.id));
 
   const status = (game: string): GameStatus => ({
     game,
@@ -284,8 +320,8 @@ export function createMockBackend(): Backend {
     installed: game === "rac1" && installed !== null,
     info: game === "rac1" ? installed : null,
     stale: scenario === "stale" && installed !== null,
-    expected_format: settings.active_version ? devManifest().data_format : null,
-    active_version: settings.active_version ? "0.1.0-dev" : null,
+    expected_format: settings.active_versions[game] ? devManifest().data_format : null,
+    active_version: settings.active_versions[game] ? (infoOf(settings.active_versions[game]!).manifest?.version ?? null) : null,
     job: job && job.game === game ? { job: job.job, kind: job.kind, game: job.game } : null,
     running: running === game,
     export_dir: lastExport ?? `${dataRoot}/games/${game}/data/exports`,
@@ -307,7 +343,7 @@ export function createMockBackend(): Backend {
     },
     startExtract: async (game, iso) => {
       if (game !== "rac1") throw "This game is not supported yet.";
-      if (!settings.active_version) throw "No game version is active. Pick one in Settings → Version Management.";
+      if (!settings.active_versions[game]) throw "No version is chosen for this game. Pick one above the Play button.";
       if (job) throw "Another extractor job is already running.";
       return runJob("extract", iso);
     },
@@ -375,8 +411,10 @@ export function createMockBackend(): Backend {
       settings.ntsc_only = value;
       return snapshot();
     },
-    listVersions: async () =>
-      [...[...installedZips].sort().reverse(), ...settings.dev_versions.map((d) => d.path)].map((id) => ({ ...devInfo(id), runtime: null })),
+    listVersions: async () => [
+      ...[...installedOfficial].sort().reverse().map(officialInfo),
+      ...[...installedZips, ...settings.dev_versions.map((d) => d.path)].map((id) => ({ ...devInfo(id), runtime: null })),
+    ],
     pickZip: async () => {
       await sleep(120);
       return `${HOME}/Downloads/${params.get("zip") ?? "rerac-0.2.0-macos-arm64.zip"}`;
@@ -386,13 +424,13 @@ export function createMockBackend(): Backend {
       await sleep(900);
       if (/bad/i.test(path)) throw "This archive is not a ReRAC build: there is no rerac-manifest.json at its top level.";
       const version = path.match(/rerac-([0-9][^-]*)/)?.[1] ?? "0.2.0";
-      installedZips.add(version);
-      return devInfo(version);
+      installedZips.add(`rac1-${version}`);
+      return devInfo(`rac1-${version}`);
     },
     uninstallVersion: async (vref) => {
       busy();
-      installedZips.delete(vref.id);
-      if (settings.active_version?.id === vref.id) settings.active_version = null;
+      (vref.source === "official" ? installedOfficial : installedZips).delete(vref.id);
+      clearActive(vref.id);
       return snapshot();
     },
     addDevVersion: async (path) => {
@@ -402,40 +440,55 @@ export function createMockBackend(): Backend {
     },
     validateVersion: async (vref) => {
       await sleep(250);
-      return devInfo(vref.id);
+      return infoOf(vref);
     },
     removeDevVersion: async (path) => {
       settings.dev_versions = settings.dev_versions.filter((d) => d.path !== path);
-      if (settings.active_version?.id === path) settings.active_version = null;
+      clearActive(path);
       return snapshot();
     },
     setActiveVersion: async (vref) => {
       busy();
       await sleep(250);
-      const info = devInfo(vref.id);
+      const info = infoOf(vref);
       if (info.problem) throw info.problem;
-      settings.active_version = vref;
+      settings.active_versions[info.manifest?.game ?? "rac1"] = vref;
       return snapshot();
     },
-    officialReleases: async (): Promise<OfficialRelease[]> => {
-      if (!settings.official.enabled) throw "Official releases are turned off.";
+    officialReleases: async (game): Promise<OfficialRelease[]> => {
+      const feed = feedOf(game);
+      if (!feed) throw "This game has no releases yet.";
+      if (!feed.enabled) throw "Official releases are turned off.";
       await sleep(300);
+      if (game !== "rac1") throw `No public releases yet (github.com/${feed.owner}/${feed.repo} is not public).`;
+      const installedId = (tag: string) => (installedOfficial.has(`rac1-${tag}`) ? `rac1-${tag}` : installedOfficial.has(tag) ? tag : null);
+      const asset = { name: "rerac-macos-arm64.zip", size: 180_000_000, browser_download_url: "" };
       return [
-        { version: "v0.2.0", date: "2026-11-02", changes: "Faster level loading · Hoverboard races · Fixes on Novalis", url: "", prerelease: false, asset: null, installed: false },
-        { version: "v0.1.0", date: "2026-10-12", changes: "First playable build: Veldin to Kerwan", url: "", prerelease: false, asset: null, installed: true },
-      ];
+        { version: "v0.2.0", date: "2026-11-02", changes: "Faster level loading · Hoverboard races · Fixes on Novalis", url: "", prerelease: false, asset },
+        { version: "v0.1.0", date: "2026-10-12", changes: "First playable build: Veldin to Kerwan", url: "", prerelease: false, asset },
+      ].map((r) => ({ ...r, id: installedId(r.version), installed: installedId(r.version) !== null }));
     },
-    setOfficialConfig: async (enabled, owner, repo) => {
-      settings.official = { enabled, owner, repo };
+    setOfficialConfig: async (game, enabled, owner, repo) => {
+      settings.feeds[game] = { enabled, owner, repo };
       return snapshot();
     },
-    downloadOfficial: async () => {
-      throw "Downloads are not available in the browser preview.";
+    downloadOfficial: async (game, version) => {
+      busy();
+      await sleep(1200);
+      const id = `${game}-${version}`;
+      installedOfficial.add(id);
+      return officialInfo(id);
     },
     onExtractorEvent: (cb) => sub(evL, cb),
     onExtractorFinished: (cb) => sub(finL, cb),
     onGameExited: (cb) => sub(exitL, cb),
     onDownloadProgress: (_cb: (p: DownloadProgress) => void) => Promise.resolve(() => {}),
+    installLauncherUpdate: async () => {
+      busy();
+      console.info("[mock] install the launcher update and restart");
+      location.search = location.search.replace(/[?&]update=1/, "");
+    },
+    onLauncherUpdate: () => Promise.resolve(() => {}),
     window: {
       minimize: async () => {},
       toggleMaximize: async () => {},

@@ -1,7 +1,7 @@
 // Launcher <-> game contract v0 (docs/contract.md), mirrored from src-tauri/src/contract.rs,
 // plus the shapes the Rust commands return. Keep in step with the Rust side.
 
-export type GameId = "rac1" | "rac2" | "rac3";
+export type GameId = "rac1" | "rac2" | "rac3" | "rac4";
 
 export interface Manifest {
   schema: number;
@@ -89,10 +89,19 @@ export interface VersionInfo {
   managed: boolean;
 }
 
+/** A game's GitHub releases feed. */
+export interface Feed {
+  enabled: boolean;
+  owner: string;
+  repo: string;
+}
+
 export interface Settings {
   schema: number;
-  active_version: VersionRef | null;
-  official: { enabled: boolean; owner: string; repo: string };
+  /** Each game's chosen version, by game id. */
+  active_versions: Partial<Record<string, VersionRef>>;
+  /** Feeds the player changed, by game id (the snapshot's `feeds` has every game's). */
+  feeds: Partial<Record<string, Feed>>;
   dev_versions: { path: string }[];
   ntsc_only: boolean;
   minimize_while_playing: boolean;
@@ -123,9 +132,21 @@ export interface AppSnapshot {
   data_root: string;
   default_data_root: string;
   settings: Settings;
-  active: ActiveSummary | null;
+  /** Each game's chosen version, by game id. */
+  actives: Partial<Record<string, ActiveSummary>>;
+  /** Games that can be installed and played: the supported ones, plus any game a listed build is for. */
+  playable: string[];
+  /** Each known game's release feed; null: the game has no releases yet. */
+  feeds: Partial<Record<string, Feed | null>>;
   job: JobState | null;
   game_running: string | null;
+  /** A newer launcher, downloaded and ready for "Restart to update". */
+  launcher_update: LauncherUpdate | null;
+}
+
+export interface LauncherUpdate {
+  version: string;
+  notes: string | null;
 }
 
 export interface GameStatus {
@@ -193,9 +214,12 @@ export interface OfficialRelease {
   prerelease: boolean;
   asset: GhAsset | null;
   installed: boolean;
+  /** The installed folder's version id (versions/official/<id>), when installed. */
+  id: string | null;
 }
 
 export interface DownloadProgress {
+  game: string;
   version: string;
   done: number;
   total: number;
