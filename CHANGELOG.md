@@ -3,6 +3,14 @@
 Each `## vX.Y.Z` section below becomes the notes of that GitHub release. Keep one paragraph per line: GitHub shows
 line breaks in release notes as they are.
 
+## v0.3.0-alpha
+
+Each game now has its own version, chosen from the Version list right above the Play button. When a newer release is out, the list says so and offers it, and nothing downloads until you pick it. Version Management in the settings has a tab for each game, and a downloaded version can be deleted there.
+
+Going Commando has its own page now. Its releases will show up there once they are published.
+
+From this version on, the launcher keeps itself up to date: it downloads a new launcher in the background and asks you to restart when it is ready, never while a game is running. This one version still has to be installed by hand.
+
 ## v0.2.1-alpha
 
 A fix for macOS: v0.2.0-alpha could be refused as "damaged" after its first launch. The app is now signed as a whole, so macOS asks once whether to open it: go to System Settings → Privacy & Security and choose Open Anyway. The Version Management button on the game screen now opens the Official releases.
