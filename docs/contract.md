@@ -70,6 +70,10 @@ On success the extractor writes `<game_data_dir>/extract-info.json`:
 {"disc":"SCUS_971.99","data_format":1,"extractor_version":"...","ntsc_only":false,"files":0,"bytes":0}
 ```
 
+`ntsc_only` says the PAL copies were skipped (`--ntsc-only`). Only R&C1's extractor has that option, and the
+launcher passes it to no other game; a game that never skips anything may leave the field out, which means
+`false`. Other keys are ignored.
+
 ## Runtime
 
 - `<runtime> --version-json` prints `{"name":"rerac","version":"...","game":"rac1","data_format":1}`

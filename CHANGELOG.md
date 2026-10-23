@@ -3,6 +3,10 @@
 Each `## vX.Y.Z` section below becomes the notes of that GitHub release. Keep one paragraph per line: GitHub shows
 line breaks in release notes as they are.
 
+## v0.3.1-alpha
+
+Installing Going Commando no longer fails just before it finishes.
+
 ## v0.3.0-alpha
 
 Each game now has its own version, chosen from the Version list right above the Play button. When a newer release is out, the list says so and offers it, and nothing downloads until you pick it. Version Management in the settings has a tab for each game, and a downloaded version can be deleted there.

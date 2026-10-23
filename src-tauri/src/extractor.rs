@@ -95,6 +95,9 @@ pub struct JobSpec {
     pub export: Option<ExportSpec>,
 }
 
+/// Games whose extractor takes `--ntsc-only` (the "Skip PAL-only data" setting).
+pub const NTSC_ONLY_GAMES: [&str; 1] = ["rac1"];
+
 impl JobSpec {
     /// A job for `game` run by the extractor of version `v`, with the data root's folders.
     pub fn new(
@@ -121,6 +124,8 @@ impl JobSpec {
 
     pub fn args(&self) -> Vec<String> {
         let s = |p: &Path| p.to_string_lossy().into_owned();
+        // `--ntsc-only` skips R&C1's PAL copies; Going Commando's extractor has no such option.
+        let ntsc_only = self.ntsc_only && NTSC_ONLY_GAMES.contains(&self.game.as_str());
         match self.kind {
             JobKind::Extract => {
                 let mut a = vec![
@@ -130,7 +135,7 @@ impl JobSpec {
                     "--out".into(),
                     s(&self.staging_dir),
                 ];
-                if self.ntsc_only {
+                if ntsc_only {
                     a.push("--ntsc-only".into());
                 }
                 a.push("--json".into());
@@ -450,6 +455,11 @@ mod tests {
         assert_eq!(a[3], "--out");
         assert!(a[4].ends_with("data.staging"));
         assert_eq!(&a[5..], ["--ntsc-only", "--json"]);
+        // Going Commando's extractor never gets it.
+        let mut g = spec(&t, "x".into(), JobKind::Extract);
+        g.game = "rac2".into();
+        g.ntsc_only = true;
+        assert_eq!(&g.args()[5..], ["--json"]);
         let v = spec(&t, "x".into(), JobKind::Verify).args();
         assert_eq!(v[0], "verify");
         assert!(v[2].ends_with("games/rac1/data"));

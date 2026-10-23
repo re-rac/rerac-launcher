@@ -84,7 +84,7 @@ export function Folders() {
           />
           <span className="toggle-ui" aria-hidden="true" />
           <span>
-            <b>Skip PAL-only data</b>
+            <b>Skip PAL-only data (Ratchet &amp; Clank)</b>
             <span className="muted"> — smaller install. Anything skipped only comes back by re-extracting from the disc.</span>
           </span>
         </label>

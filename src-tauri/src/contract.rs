@@ -223,6 +223,9 @@ pub struct ExtractInfo {
     pub disc: String,
     pub data_format: u32,
     pub extractor_version: String,
+    /// The PAL copies were skipped (`--ntsc-only`, R&C1 only). Optional: a game whose extractor
+    /// never skips anything (Going Commando) may leave it out, which means `false`.
+    #[serde(default)]
     pub ntsc_only: bool,
     pub files: u64,
     pub bytes: u64,
@@ -394,6 +397,13 @@ mod tests {
         .unwrap();
         assert_eq!(info.files, 812);
         assert_eq!(info.bytes, 4_000_000_000);
+        // Going Commando's receipt: no ntsc_only (nothing is ever skipped), plus its own `game` key.
+        let rac2 = ExtractInfo::parse(
+            r#"{"game":"rac2","disc":"SCUS_972.68","data_format":1,"extractor_version":"0.1.1","files":96,"bytes":3807638923}"#,
+        )
+        .unwrap();
+        assert!(!rac2.ntsc_only);
+        assert_eq!(rac2.disc, "SCUS_972.68");
         let rv = RuntimeVersion::parse(
             "starting up\n{\"name\":\"rerac\",\"version\":\"0.1.0\",\"game\":\"rac1\",\"data_format\":1}\n",
         )
