@@ -1,0 +1,39 @@
+{
+  "version": "0.3.1",
+  "notes": "",
+  "pub_date": "2026-10-23T11:23:31.722Z",
+  "platforms": {
+    "darwin-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSajlSWjRPaTJOWmw1VURtbU9TYU1QbG5hZ0xDNnlhMUJ3ZStTc2xVUzQ1OHZRbmZDdzQzUlJQU1A5UnRNZ1pLR0M5RnZMcURDWm1jVGRUdTJTUi93dnAvazhEVW5RZnd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU0NDU1CWZpbGU6UmVSQUMgTGF1bmNoZXIuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xCjViQ0pnV0xmdkE4ZEdUdjYzVThONG5yb3JZb1FrMTZUZ1ZVUmxaRHFqZWFRV0RJUXlGeTFXQWhSS1FBSlBmSXBVRXp0dThTZS9mOGlvVEFyMUlVRUJ3PT0K",
+      "url": "https://github.com/re-rac/rerac-launcher/releases/download/v0.3.1-alpha/ReRAC.Launcher_x64.app.tar.gz"
+    },
+    "darwin-x86_64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSajlSWjRPaTJOWmw1VURtbU9TYU1QbG5hZ0xDNnlhMUJ3ZStTc2xVUzQ1OHZRbmZDdzQzUlJQU1A5UnRNZ1pLR0M5RnZMcURDWm1jVGRUdTJTUi93dnAvazhEVW5RZnd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU0NDU1CWZpbGU6UmVSQUMgTGF1bmNoZXIuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xCjViQ0pnV0xmdkE4ZEdUdjYzVThONG5yb3JZb1FrMTZUZ1ZVUmxaRHFqZWFRV0RJUXlGeTFXQWhSS1FBSlBmSXBVRXp0dThTZS9mOGlvVEFyMUlVRUJ3PT0K",
+      "url": "https://github.com/re-rac/rerac-launcher/releases/download/v0.3.1-alpha/ReRAC.Launcher_x64.app.tar.gz"
+    },
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSajlSWjRPaTJOWnBieC9LUnlGSzJjekhwd1poQThtdER5Y2RjSllOTzkvZS9NZ3p1QnhsdU5zMFZ0bHl0Y3g3QXJCOGJJcGQzbGhUVGtIQUVxaURzbW9XR0NPVmtRUFFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU0NDY1CWZpbGU6UmVSQUMgTGF1bmNoZXIuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xCkRUZDhIdGxqUWtLOVRNTUFzM1Z0aW1Pa0xCZXNldXhZTmszYlFQcDNmZDRsV2wxazdQZ1ZCeEdQekVleUorMmsyM0FTeWhISUZ1dkpsQmJYTSs4REF3PT0K",
+      "url": "https://github.com/re-rac/rerac-launcher/releases/download/v0.3.1-alpha/ReRAC.Launcher_aarch64.app.tar.gz"
+    },
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSajlSWjRPaTJOWnBieC9LUnlGSzJjekhwd1poQThtdER5Y2RjSllOTzkvZS9NZ3p1QnhsdU5zMFZ0bHl0Y3g3QXJCOGJJcGQzbGhUVGtIQUVxaURzbW9XR0NPVmtRUFFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU0NDY1CWZpbGU6UmVSQUMgTGF1bmNoZXIuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xCkRUZDhIdGxqUWtLOVRNTUFzM1Z0aW1Pa0xCZXNldXhZTmszYlFQcDNmZDRsV2wxazdQZ1ZCeEdQekVleUorMmsyM0FTeWhISUZ1dkpsQmJYTSs4REF3PT0K",
+      "url": "https://github.com/re-rac/rerac-launcher/releases/download/v0.3.1-alpha/ReRAC.Launcher_aarch64.app.tar.gz"
+    },
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSajlSWjRPaTJOWnNGVDRMVGJNWmdEdURRTEtmU0daZ0hFMmhWdGxHdnBhNG9vTHcrMjMxcmV0Sy9DU2oxZ2w1YWRDNnBZMEo1UVhJeXNhSnVweThGbEdEbXN1dExqMHdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU0NjAwCWZpbGU6UmVSQUMgTGF1bmNoZXJfMC4zLjFfYW1kNjQuQXBwSW1hZ2UJdmVyc2lvbjowLjMuMQpjZVd3bUY4YVBBcS9xSGdYZm5XUjJHQmhYTk5UdEhBOEd0MlJQVHQ3cXNHSitkRU9XbTZPZWpOWEp3ZzZzSjI3OG9BMmRvT0M0dGtmdEhieUNwTWdBZz09Cg==",
+      "url": "https://github.com/re-rac/rerac-launcher/releases/download/v0.3.1-alpha/ReRAC.Launcher_0.3.1_amd64.AppImage"
+    },
+    "linux-x86_64-appimage": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSajlSWjRPaTJOWnNGVDRMVGJNWmdEdURRTEtmU0daZ0hFMmhWdGxHdnBhNG9vTHcrMjMxcmV0Sy9DU2oxZ2w1YWRDNnBZMEo1UVhJeXNhSnVweThGbEdEbXN1dExqMHdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU0NjAwCWZpbGU6UmVSQUMgTGF1bmNoZXJfMC4zLjFfYW1kNjQuQXBwSW1hZ2UJdmVyc2lvbjowLjMuMQpjZVd3bUY4YVBBcS9xSGdYZm5XUjJHQmhYTk5UdEhBOEd0MlJQVHQ3cXNHSitkRU9XbTZPZWpOWEp3ZzZzSjI3OG9BMmRvT0M0dGtmdEhieUNwTWdBZz09Cg==",
+      "url": "https://github.com/re-rac/rerac-launcher/releases/download/v0.3.1-alpha/ReRAC.Launcher_0.3.1_amd64.AppImage"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSajlSWjRPaTJOWmd1ajZaMXZlMzlCWTZuNGZTM1M3R0t4dkEyT0Voa1lpRFJ2NENuMHVmWFZTcE9oeS8xOEJ0N25hY0NlSk1tSWNkWVJ5VVRPR2NuSk43RXRCZWRrT1FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU0NjA5CWZpbGU6UmVSQUMgTGF1bmNoZXJfMC4zLjFfeDY0X2VuLVVTLm1zaQl2ZXJzaW9uOjAuMy4xCkJGZzA2ZDVEN1NsOSsrc2lIUGFzTHBHaEtIc0cydFpwdmxROGZNVUJCOHozSUVtV1ZLUFh0NEliOTI3RFl1azBRL3AvSXdOMEdFOStGakRqQzZzdEFnPT0K",
+      "url": "https://github.com/re-rac/rerac-launcher/releases/download/v0.3.1-alpha/ReRAC.Launcher_0.3.1_x64_en-US.msi"
+    },
+    "windows-x86_64-msi": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSajlSWjRPaTJOWmd1ajZaMXZlMzlCWTZuNGZTM1M3R0t4dkEyT0Voa1lpRFJ2NENuMHVmWFZTcE9oeS8xOEJ0N25hY0NlSk1tSWNkWVJ5VVRPR2NuSk43RXRCZWRrT1FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNzU0NjA5CWZpbGU6UmVSQUMgTGF1bmNoZXJfMC4zLjFfeDY0X2VuLVVTLm1zaQl2ZXJzaW9uOjAuMy4xCkJGZzA2ZDVEN1NsOSsrc2lIUGFzTHBHaEtIc0cydFpwdmxROGZNVUJCOHozSUVtV1ZLUFh0NEliOTI3RFl1azBRL3AvSXdOMEdFOStGakRqQzZzdEFnPT0K",
+      "url": "https://github.com/re-rac/rerac-launcher/releases/download/v0.3.1-alpha/ReRAC.Launcher_0.3.1_x64_en-US.msi"
+    }
+  }
+}
